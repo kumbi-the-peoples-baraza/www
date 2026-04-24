@@ -1,6 +1,6 @@
 # Kumbi
 
-Community projects & social work platform.
+The People's Baraza - Website
 
 ## Stack
 
