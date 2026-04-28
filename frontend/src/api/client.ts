@@ -40,8 +40,10 @@ export const pagesApi = {
 
 // Content
 export const contentApi = {
-  get: (pageId: string) => api.get(`/content/${pageId}`),
+  list: (pageId: string) => api.get(`/content/${pageId}`),
+  create: (pageId: string, data: unknown) => api.post(`/content/${pageId}`, data),
   update: (id: string, data: unknown) => api.put(`/content/${id}`, data),
+  delete: (id: string) => api.delete(`/content/${id}`),
 }
 
 // Forms
@@ -81,6 +83,12 @@ export const usersApi = {
   create: (data: unknown) => api.post('/users', data),
   update: (id: string, data: unknown) => api.put(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
+}
+
+// Analytics
+export const analyticsApi = {
+  get: () => api.get('/analytics'),
+  update: (config: Record<string, unknown>) => api.put('/analytics', { config }),
 }
 
 // Appearance

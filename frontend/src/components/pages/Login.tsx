@@ -35,7 +35,7 @@ export default function Login() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-4">
             <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center text-white font-bold">J</div>
-            <an className="text-2xl font-bold gradient-text">Kumbi CMS</span>
+            <span className="text-2xl font-bold gradient-text">Kumbi CMS</span>
           </div>
           <p className="text-muted-foreground">Sign in to manage your content</p>
         </div>

@@ -40,6 +40,9 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 	mediaH := handlers.NewMediaHandler(db, cfg)
 	notebooksH := handlers.NewNotebooksHandler(db, cfg)
 	appearanceH := handlers.NewAppearanceHandler(db)
+	usersH := handlers.NewUsersHandler(db)
+	analyticsH := handlers.NewAnalyticsHandler(db)
+	contentH := handlers.NewContentHandler(db)
 
 	v1 := r.Group("/api/v1")
 
@@ -52,6 +55,7 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 	v1.GET("/pages", pagesH.List)
 	v1.GET("/pages/:slug", pagesH.Get)
 	v1.GET("/appearance", appearanceH.Get)
+	v1.GET("/analytics", analyticsH.Get)
 	v1.POST("/forms/contact", formsH.Submit("contact"))
 	v1.POST("/forms/volunteer", formsH.Submit("volunteer"))
 
@@ -82,6 +86,18 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 		cms.GET("/notebooks/:id", notebooksH.Get)
 
 		cms.PUT("/appearance", middleware.RequireRole("admin"), appearanceH.Update)
+
+		cms.GET("/users", middleware.RequireRole("admin"), usersH.List)
+		cms.POST("/users", middleware.RequireRole("admin"), usersH.Create)
+		cms.PUT("/users/:id", middleware.RequireRole("admin"), usersH.Update)
+		cms.DELETE("/users/:id", middleware.RequireRole("admin"), usersH.Delete)
+
+		cms.PUT("/analytics", middleware.RequireRole("admin"), analyticsH.Update)
+
+		cms.GET("/content/:pageId", contentH.List)
+		cms.POST("/content/:pageId", middleware.RequireRole("admin", "editor"), contentH.Create)
+		cms.PUT("/content/:id", middleware.RequireRole("admin", "editor"), contentH.Update)
+		cms.DELETE("/content/:id", middleware.RequireRole("admin", "editor"), contentH.Delete)
 	}
 
 	return r

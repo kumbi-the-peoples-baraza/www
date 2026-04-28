@@ -99,6 +99,9 @@ CREATE TABLE IF NOT EXISTS analytics_config (
 -- Seed default appearance
 INSERT INTO appearance (id) VALUES (uuid_generate_v4()) ON CONFLICT DO NOTHING;
 
+-- Seed default analytics config
+INSERT INTO analytics_config (id) VALUES (uuid_generate_v4()) ON CONFLICT DO NOTHING;
+
 -- Seed default pages
 INSERT INTO pages (slug, title, status, display_mode, "order") VALUES
     ('home',     'Home',       'published', 'full', 1),

@@ -9,3 +9,8 @@ storage/
 .DS_Store
 docs/
 scripts/
+
+# K8s secrets — never commit real values
+k8s/dev/secrets.env
+k8s/prod/secrets.yaml
+
