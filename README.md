@@ -19,8 +19,8 @@ cd kumbi
 ./scripts/kumbi.sh setup
 
 # 2. Configure secrets
-cp backend/.env.example backend/.env
-# Edit backend/.env with your values
+cp k8s/dev/secrets.env.example k8s/dev/secrets.env
+# Edit k8s/dev/secrets.env with your values
 
 # 3. Start development servers (postgres via Docker Compose, backend + frontend natively)
 ./scripts/kumbi.sh dev
@@ -196,6 +196,13 @@ kumbi/
 │   ├── dev/           # Podman pod script (pod.sh) + dev secrets template
 │   ├── prod/          # microk8s deploy script (deploy.sh) + prod secrets template
 │   └── k8s.sh         # Entry point — delegates to dev/ or prod/
+├── docs/              # Extended documentation
+│   ├── architecture.md
+│   ├── backend.md
+│   ├── frontend.md
+│   ├── cms-guide.md
+│   ├── deployment.md
+│   └── api.md
 ├── scripts/           # Build/deploy scripts
 │   └── kumbi.sh       # Main CLI
 ├── docker-compose.yml
@@ -204,9 +211,11 @@ kumbi/
 
 ## Secrets Management
 
-Secrets are never stored in `.env` files or committed to the repository. They are injected as environment variables at runtime via the K8s layer.
+Secrets are never committed to the repository for k8s deployments. For the Docker Compose path, `docker-compose.yml` uses a dev-only hardcoded password — replace it or use `${VAR}` substitution for production Docker Compose use.
 
-### Dev/Test (Podman pod)
+### Dev/Test (Podman pod or Docker Compose)
+
+All local workflows — native dev, Docker Compose, and Podman pod — read from the same file:
 
 ```bash
 # One-time setup
@@ -214,7 +223,7 @@ cp k8s/dev/secrets.env.example k8s/dev/secrets.env
 # Edit k8s/dev/secrets.env with your values
 ```
 
-`secrets.env` is sourced by `pod.sh` and passed to containers as env vars. The backend reads them directly from the environment — no `.env` file is needed or used.
+`secrets.env` is sourced by both `kumbi.sh` (for native dev and Docker Compose) and `pod.sh` (for the Podman pod). The backend reads vars directly from the environment — no `backend/.env` file is used.
 
 ### Production (microk8s)
 
@@ -236,10 +245,10 @@ cp k8s/prod/secrets.yaml.example k8s/prod/secrets.yaml
 | ---------------------- | -------- | -------------------- | ---------------------------------------- |
 | `DATABASE_URL`         | ✅       | —                    | PostgreSQL connection string             |
 | `JWT_SECRET`           | ✅       | —                    | Min 32-char random string                |
-| `ALLOW_ORIGIN`         | ✅       | `http://localhost:5173` | Allowed CORS origin                   |
+| `ALLOW_ORIGIN`         |          | `http://localhost:5173` | Allowed CORS origin                   |
 | `PORT`                 |          | `8080`               | HTTP listen port                         |
 | `ENV`                  |          | `development`        | Runtime environment (`development` / `production`) |
-| `STORAGE_PATH`         |          | `/app/storage`       | Filesystem path for uploaded media       |
+| `STORAGE_PATH`         |          | `./storage`          | Filesystem path for uploaded media       |
 | `SMTP_HOST`            |          | —                    | SMTP server hostname                     |
 | `SMTP_PORT`            |          | `587`                | SMTP server port                         |
 | `SMTP_USER`            |          | —                    | SMTP username                            |
