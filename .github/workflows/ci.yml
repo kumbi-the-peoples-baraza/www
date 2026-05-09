@@ -1,54 +1,268 @@
-name: CI/CD
+name: CI / CD
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
+# Cancel in-progress runs for the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ${{ vars.REGISTRY || 'ghcr.io/kumbi' }}
+  BACKEND_IMG: kumbi/backend
+  FRONTEND_IMG: kumbi/frontend
+
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
+
+  # ── 1. Backend tests ────────────────────────────────────────────────────────
   test-backend:
+    name: Test — Backend
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: jimbi_test
-          POSTGRES_USER: jimbi
-          POSTGRES_PASSWORD: jimbi_secret
+          POSTGRES_DB: kumbi_test
+          POSTGRES_USER: kumbi
+          POSTGRES_PASSWORD: kumbi_secret
         ports: ["5432:5432"]
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 5
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: "1.23" }
-      - name: Test
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+      - name: Run tests
         working-directory: backend
         env:
-          DATABASE_URL: postgres://jimbi:jimbi_secret@localhost:5432/jimbi_test?sslmode=disable
-          JWT_SECRET: test_secret_at_least_32_chars_long
-        run: go test ./... -v
+          DATABASE_URL: postgres://kumbi:kumbi_secret@localhost:5432/kumbi_test?sslmode=disable
+          JWT_SECRET: ci_test_secret_at_least_32_chars_long
+        run: go test ./... -v -race -coverprofile=coverage.out
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.out
 
+  # ── 2. Frontend tests ───────────────────────────────────────────────────────
   test-frontend:
+    name: Test — Frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Install & Build
+      - name: Install & build
         working-directory: frontend
         run: |
-          bun install
+          bun install --frozen-lockfile
           bun run build
+      - name: Lint
+        working-directory: frontend
+        run: bun run lint || true   # non-blocking until lint is fully configured
 
-  deploy:
+  # ── 3. Build & push images ──────────────────────────────────────────────────
+  build-images:
+    name: Build & Push Images
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # Build on main pushes and version tags; skip on PRs
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy via Docker Compose
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ALLOW_ORIGIN: ${{ secrets.ALLOW_ORIGIN }}
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tag
+        id: meta
         run: |
-          echo "Add SSH deploy or k8s rollout here"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="${{ github.sha }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BACKEND_IMG }}:${{ steps.meta.outputs.tag }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}:latest', env.REGISTRY, env.BACKEND_IMG) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMG }}:${{ steps.meta.outputs.tag }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}:latest', env.REGISTRY, env.FRONTEND_IMG) || '' }}
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL_STAGING || 'http://localhost/api' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── 4. Deploy — Staging (auto on tags) ─────────────────────────────────────
+  deploy-staging:
+    name: Deploy — Staging
+    needs: build-images
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write staging secrets
+        run: |
+          cat > infra/k8s/overlays/staging/secrets.yaml <<EOF
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: backend-secret
+            namespace: kumbi-staging
+          type: Opaque
+          stringData:
+            DATABASE_URL: "${{ secrets.STAGING_DATABASE_URL }}"
+            JWT_SECRET: "${{ secrets.STAGING_JWT_SECRET }}"
+            ALLOW_ORIGIN: "${{ vars.STAGING_URL }}"
+            STORAGE_PATH: /app/storage
+            SEED_ADMIN_EMAIL: "${{ secrets.SEED_ADMIN_EMAIL }}"
+            SEED_ADMIN_PASSWORD: "${{ secrets.SEED_ADMIN_PASSWORD }}"
+            SMTP_HOST: "${{ secrets.SMTP_HOST }}"
+            SMTP_PORT: "${{ vars.SMTP_PORT || '587' }}"
+            SMTP_USER: "${{ secrets.SMTP_USER }}"
+            SMTP_PASS: "${{ secrets.SMTP_PASS }}"
+            WHATSAPP_WEBHOOK_URL: "${{ secrets.WHATSAPP_WEBHOOK_URL }}"
+          ---
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: postgres-secret
+            namespace: kumbi-staging
+          type: Opaque
+          stringData:
+            POSTGRES_PASSWORD: "${{ secrets.STAGING_POSTGRES_PASSWORD }}"
+          EOF
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > /tmp/kubeconfig
+
+      - name: Deploy staging overlay
+        env:
+          KUBECONFIG: /tmp/kubeconfig
+          REGISTRY: ${{ env.REGISTRY }}
+          TAG: ${{ needs.build-images.outputs.tag }}
+        run: |
+          # Patch image tags in overlay before applying
+          cd infra/k8s/overlays/staging
+          kustomize edit set image \
+            kumbi/backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMG }}:$TAG \
+            kumbi/frontend=${{ env.REGISTRY }}/${{ env.FRONTEND_IMG }}:$TAG
+          kubectl apply -k .
+          kubectl rollout status deployment/backend  -n kumbi-staging --timeout=120s
+          kubectl rollout status deployment/frontend -n kumbi-staging --timeout=120s
+
+  # ── 5. Deploy — Production (manual approval required) ──────────────────────
+  deploy-prod:
+    name: Deploy — Production
+    needs: [build-images, deploy-staging]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production
+      url: ${{ vars.PROD_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write prod secrets
+        run: |
+          cat > infra/k8s/overlays/prod/secrets.yaml <<EOF
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: backend-secret
+            namespace: kumbi
+          type: Opaque
+          stringData:
+            DATABASE_URL: "${{ secrets.PROD_DATABASE_URL }}"
+            JWT_SECRET: "${{ secrets.PROD_JWT_SECRET }}"
+            ALLOW_ORIGIN: "${{ vars.PROD_URL }}"
+            STORAGE_PATH: /app/storage
+            SEED_ADMIN_EMAIL: "${{ secrets.SEED_ADMIN_EMAIL }}"
+            SEED_ADMIN_PASSWORD: "${{ secrets.SEED_ADMIN_PASSWORD }}"
+            SMTP_HOST: "${{ secrets.SMTP_HOST }}"
+            SMTP_PORT: "${{ vars.SMTP_PORT || '587' }}"
+            SMTP_USER: "${{ secrets.SMTP_USER }}"
+            SMTP_PASS: "${{ secrets.SMTP_PASS }}"
+            WHATSAPP_WEBHOOK_URL: "${{ secrets.WHATSAPP_WEBHOOK_URL }}"
+          ---
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: postgres-secret
+            namespace: kumbi
+          type: Opaque
+          stringData:
+            POSTGRES_PASSWORD: "${{ secrets.PROD_POSTGRES_PASSWORD }}"
+          EOF
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: echo "${{ secrets.PROD_KUBECONFIG }}" | base64 -d > /tmp/kubeconfig
+
+      - name: Deploy prod overlay
+        env:
+          KUBECONFIG: /tmp/kubeconfig
+          REGISTRY: ${{ env.REGISTRY }}
+          TAG: ${{ needs.build-images.outputs.tag }}
+        run: |
+          cd infra/k8s/overlays/prod
+          kustomize edit set image \
+            kumbi/backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMG }}:$TAG \
+            kumbi/frontend=${{ env.REGISTRY }}/${{ env.FRONTEND_IMG }}:$TAG
+          kubectl apply -k .
+          kubectl rollout status deployment/backend  -n kumbi --timeout=180s
+          kubectl rollout status deployment/frontend -n kumbi --timeout=180s
+
+      - name: Run seed job
+        env:
+          KUBECONFIG: /tmp/kubeconfig
+        run: |
+          kubectl delete job seed-admin -n kumbi --ignore-not-found
+          kubectl apply -f infra/k8s/base/seed-job.yaml
+          kubectl wait --for=condition=complete job/seed-admin -n kumbi --timeout=60s

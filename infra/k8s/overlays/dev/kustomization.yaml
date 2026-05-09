@@ -1,0 +1,48 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - secrets.yaml
+
+images:
+  - name: kumbi/backend
+    newName: kumbi/backend
+    newTag: dev
+  - name: kumbi/frontend
+    newName: kumbi/frontend
+    newTag: dev
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /data/ENV
+        value: development
+    target:
+      kind: ConfigMap
+      name: backend-config
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: backend
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: frontend
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/initContainers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Job
+      name: seed-admin

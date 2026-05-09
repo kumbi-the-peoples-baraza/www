@@ -1,39 +1,124 @@
-import { Link } from 'react-router-dom'
-import { Github, Twitter, Mail } from 'lucide-react'
+import { Github, Twitter, Facebook, Mail, Phone, MapPin } from "lucide-react";
+import { useContactStore } from "@/store/contactStore";
 
 export default function Footer() {
+  const { open: openContact } = useContactStore();
+  const fg = "hsl(var(--nav-fg))";
+  const fgMuted = "hsl(var(--nav-fg) / 0.65)";
+  const border = "hsl(var(--nav-border))";
+
   return (
-    <footer className="glass border-t border-white/10 mt-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 grid grid-cols-1 sm:grid-cols-3 gap-8">
+    <footer
+      style={{
+        background: "hsl(var(--nav-bg))",
+        borderTop: `1px solid ${border}`,
+      }}
+    >
+      <div className="max-w-7xl mx-auto px-6 sm:px-10 pt-16 pb-10 grid grid-cols-1 md:grid-cols-2 gap-12">
+        {/* Brand */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg gradient-bg flex items-center justify-center text-white font-bold text-xs">J</div>
-            <span className="font-bold gradient-text">Kumbi</span>
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-black text-lg">
+              K
+            </div>
+            <div>
+              <span className="font-black text-xl tracking-tight text-primary block">
+                Kumbi
+              </span>
+              <span
+                className="text-xs font-semibold tracking-widest uppercase"
+                style={{ color: fgMuted }}
+              >
+                The People's Baraza
+              </span>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">Community projects & social work making a difference.</p>
-        </div>
-        <div>
-          <h4 className="font-semibold mb-3 text-sm">Quick Links</h4>
-          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-            {[['/', 'Home'], ['/projects', 'Projects'], ['/blog', 'Blog'], ['/about', 'About'], ['/contact', 'Contact']].map(([to, label]) => (
-              <Link key={to} to={to} className="hover:text-primary transition-colors">{label}</Link>
-            ))}
-          </div>
-        </div>
-        <div>
-          <h4 className="font-semibold mb-3 text-sm">Connect</h4>
+          <p
+            className="text-sm leading-relaxed mb-7 max-w-sm"
+            style={{ color: fgMuted }}
+          >
+            Driving meaningful change across Kenya through data, democracy, and
+            dedicated social work.
+          </p>
           <div className="flex gap-3">
-            {[Github, Twitter, Mail].map((Icon, i) => (
-              <a key={i} href="#" className="p-2 glass-card hover:bg-primary/10 transition-colors rounded-xl">
+            {[Github, Twitter, Facebook].map((Icon, i) => (
+              <a
+                key={i}
+                href="#"
+                className="w-10 h-10 rounded-xl border flex items-center justify-center hover:bg-primary/10 hover:border-primary hover:text-primary transition-all"
+                style={{ borderColor: border, color: fgMuted }}
+              >
                 <Icon className="w-4 h-4" />
               </a>
             ))}
           </div>
         </div>
+
+        {/* Contact */}
+        <div>
+          <h4
+            className="font-black text-sm mb-6 uppercase tracking-widest"
+            style={{ color: fg }}
+          >
+            Get in Touch
+          </h4>
+          <div className="flex flex-col gap-5">
+            <div className="flex items-start gap-4">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-bold" style={{ color: fg }}>
+                  The People's Baraza
+                </p>
+                <p className="text-sm" style={{ color: fgMuted }}>
+                  Ngong Road, Kilimani
+                </p>
+                <p className="text-sm" style={{ color: fgMuted }}>
+                  Nairobi, Kenya
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Mail className="w-4 h-4 text-primary" />
+              </div>
+              <a
+                href="mailto:hello@kumbi.org"
+                className="text-sm font-semibold hover:text-primary transition-colors"
+                style={{ color: fgMuted }}
+              >
+                hello@kumbike.org
+              </a>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Phone className="w-4 h-4 text-primary" />
+              </div>
+              <a
+                href="tel:+254702550800"
+                className="text-sm font-semibold hover:text-primary transition-colors"
+                style={{ color: fgMuted }}
+              >
+                +254 702 550 800
+              </a>
+            </div>
+            <button
+              onClick={openContact}
+              className="btn-primary mt-2 self-start"
+            >
+              <Mail className="w-5 h-5" /> Get in Touch
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="border-t border-white/10 py-4 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Kumbi. All rights reserved.
+
+      <div
+        className="border-t py-5 text-center text-sm font-medium"
+        style={{ borderColor: border, color: fgMuted }}
+      >
+        © 2026 The People's Baraza. All Rights Reserved.
       </div>
     </footer>
-  )
+  );
 }

@@ -25,53 +25,58 @@ export default function Contact() {
   })
 
   return (
-    <div className="section pt-32">
-      <h1 className="text-4xl font-bold mb-6 gradient-text">Contact Us</h1>
+    <div className="section pt-28">
+      <h1 className="text-4xl font-black mb-3 tracking-tight text-primary">Contact Us</h1>
+      <p className="text-muted-foreground mb-10 text-base">Get in touch — we'd love to hear from you.</p>
+
       <div className="grid md:grid-cols-2 gap-12">
-        <div>
-          <p className="text-muted-foreground mb-8">Get in touch with us. We'd love to hear from you.</p>
-          <div className="flex flex-col gap-4">
-            {[
-              { icon: Mail, label: 'Email', value: 'hello@kumbi.org' },
-              { icon: Phone, label: 'Phone', value: '+254 700 000 000' },
-              { icon: MapPin, label: 'Location', value: 'Nairobi, Kenya' },
-            ].map((item) => (
-              <div key={item.label} className="flex items-start gap-3">
-                <div className="p-2 rounded-xl glass">
-                  <item.icon className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{item.label}</p>
-                  <p className="font-medium">{item.value}</p>
-                </div>
+        {/* Contact info */}
+        <div className="flex flex-col gap-6">
+          {[
+            { icon: Mail,    label: 'Email',    value: 'hello@kumbi.org' },
+            { icon: Phone,   label: 'Phone',    value: '+254 700 000 000' },
+            { icon: MapPin,  label: 'Location', value: 'Nairobi, Kenya' },
+          ].map((item) => (
+            <div key={item.label} className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl glass flex items-center justify-center shrink-0">
+                <item.icon className="w-5 h-5 text-primary" />
               </div>
-            ))}
-          </div>
+              <div>
+                <p className="text-sm font-semibold text-muted-foreground mb-0.5">{item.label}</p>
+                <p className="text-base font-bold">{item.value}</p>
+              </div>
+            </div>
+          ))}
         </div>
-        <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="card flex flex-col gap-4">
+
+        {/* Form */}
+        <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="card flex flex-col gap-5">
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Name</label>
-            <input {...register('name')} className="input-field" />
-            {errors.name && <p className="text-xs text-destructive mt-1">{errors.name.message}</p>}
+            <label className="form-label">Name</label>
+            <input {...register('name')} className="input-field" placeholder="Your full name" />
+            {errors.name && <p className="text-sm text-destructive mt-1.5">{errors.name.message}</p>}
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Email</label>
-            <input {...register('email')} type="email" className="input-field" />
-            {errors.email && <p className="text-xs text-destructive mt-1">{errors.email.message}</p>}
+            <label className="form-label">Email</label>
+            <input {...register('email')} type="email" className="input-field" placeholder="you@example.com" />
+            {errors.email && <p className="text-sm text-destructive mt-1.5">{errors.email.message}</p>}
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Subject</label>
-            <input {...register('subject')} className="input-field" />
-            {errors.subject && <p className="text-xs text-destructive mt-1">{errors.subject.message}</p>}
+            <label className="form-label">Subject</label>
+            <input {...register('subject')} className="input-field" placeholder="How can we help?" />
+            {errors.subject && <p className="text-sm text-destructive mt-1.5">{errors.subject.message}</p>}
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Message</label>
-            <textarea {...register('message')} rows={5} className="input-field" />
-            {errors.message && <p className="text-xs text-destructive mt-1">{errors.message.message}</p>}
+            <label className="form-label">Message</label>
+            <textarea {...register('message')} rows={5} className="input-field resize-none" placeholder="Tell us more..." />
+            {errors.message && <p className="text-sm text-destructive mt-1.5">{errors.message.message}</p>}
           </div>
-          <button type="submit" disabled={mutation.isPending} className="btn-primary">
-            {mutation.isPending ? 'Sending...' : 'Send Message'}
+          <button type="submit" disabled={mutation.isPending} className="btn-primary w-full">
+            {mutation.isPending ? 'Sending…' : 'Send Message'}
           </button>
+          {mutation.isError && (
+            <p className="text-sm text-destructive text-center">Something went wrong. Please try again.</p>
+          )}
         </form>
       </div>
     </div>

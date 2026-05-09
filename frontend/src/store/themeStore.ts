@@ -1,19 +1,21 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export type Theme = 'light' | 'dim' | 'dark'
+
 interface ThemeState {
-  theme: 'light' | 'dark'
+  theme: Theme
   textZoom: number
-  toggleTheme: () => void
+  setTheme: (t: Theme) => void
   setTextZoom: (zoom: number) => void
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'dark',
+      theme: 'light',
       textZoom: 1,
-      toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+      setTheme: (theme) => set({ theme }),
       setTextZoom: (zoom) => set({ textZoom: Math.min(1.5, Math.max(0.75, zoom)) }),
     }),
     { name: 'kumbi-theme' }

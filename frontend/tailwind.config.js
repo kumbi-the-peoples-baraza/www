@@ -10,6 +10,7 @@ export default {
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
         background: 'hsl(var(--background))',
+        'background-low': 'hsl(var(--background-low))',
         foreground: 'hsl(var(--foreground))',
         primary: {
           DEFAULT: 'hsl(var(--primary))',
@@ -30,10 +31,6 @@ export default {
         accent: {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
-        },
-        glass: {
-          DEFAULT: 'rgba(255,255,255,0.08)',
-          dark: 'rgba(0,0,0,0.25)',
         },
       },
       borderRadius: {

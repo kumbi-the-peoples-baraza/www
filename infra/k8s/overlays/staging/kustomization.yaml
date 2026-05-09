@@ -1,0 +1,33 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - secrets.yaml
+
+namespace: kumbi-staging
+
+images:
+  - name: kumbi/backend
+    newName: ${REGISTRY}/kumbi/backend
+    newTag: ${TAG}
+  - name: kumbi/frontend
+    newName: ${REGISTRY}/kumbi/frontend
+    newTag: ${TAG}
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: kumbi-staging
+    target:
+      kind: Namespace
+      name: kumbi
+  - patch: |-
+      - op: replace
+        path: /data/ENV
+        value: staging
+    target:
+      kind: ConfigMap
+      name: backend-config

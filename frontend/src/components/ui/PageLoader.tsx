@@ -19,7 +19,7 @@ export default function PageLoader() {
             animate={{ rotate: -360 }}
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           />
-          <div className="absolute inset-4 rounded-full gradient-bg opacity-60" />
+          <div className="absolute inset-4 rounded-full bg-primary/50" />
         </div>
         <p className="text-sm text-muted-foreground font-medium tracking-widest uppercase">Loading</p>
       </motion.div>

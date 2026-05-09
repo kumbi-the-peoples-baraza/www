@@ -6,164 +6,101 @@
 
 - **Frontend**: React 18, TypeScript, Vite, Bun, Tailwind CSS, Shadcn/Radix, Framer Motion, TanStack Query, Zustand, Zod
 - **Backend**: Go, Gin, PostgreSQL, pgx
-- **Infra**: Docker Compose, Nginx, GitHub Actions, microk8s, Podman
+- **Infra**: Docker, k3d (k3s in Docker), Kubernetes, Kustomize, Traefik ingress
 
 ## Quick Start
 
-### Docker Compose (local dev, no Kubernetes)
-
 ```bash
-# 1. Clone and setup
-git clone <repo>
-cd kumbi
-./scripts/kumbi.sh setup
+# Prerequisites: docker, k3d, kubectl, go 1.23+, bun
+# Install k3d: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 
-# 2. Configure secrets
-cp k8s/dev/secrets.env.example k8s/dev/secrets.env
-# Edit k8s/dev/secrets.env with your values
+git clone <repo> && cd kumbi
+cp .env.example .env
+cp infra/k8s/overlays/dev/secrets.yaml.example infra/k8s/overlays/dev/secrets.yaml
+# Edit secrets.yaml — set DATABASE_URL, JWT_SECRET, POSTGRES_PASSWORD at minimum
 
-# 3. Start development servers (postgres via Docker Compose, backend + frontend natively)
-./scripts/kumbi.sh dev
-
-# 4. Create admin user
-./scripts/kumbi.sh seed admin admin@kumbi.local yourpassword
+make setup   # install deps
+make dev     # creates k3d cluster, builds images, deploys
 ```
 
-### Podman pod (dev/test, no cluster required)
+Frontend + CMS: `http://localhost` · Backend API: `http://localhost/api`
 
-```bash
-# 1. Clone and setup
-git clone <repo>
-cd kumbi
+## Environments
 
-# 2. Configure secrets
-cp k8s/dev/secrets.env.example k8s/dev/secrets.env
-# Edit k8s/dev/secrets.env with your values
-
-# 3. Start all services in a pod
-./scripts/kumbi.sh k8s dev up
-```
-
-Frontend: `http://localhost:5173`  
-Backend: `http://localhost:8080`  
-CMS: `http://localhost:5173/cms`
+| Env | Command | URL |
+|-----|---------|-----|
+| dev | `make dev` | `http://localhost` |
+| test | `make k8s-test-up` | `http://localhost:8080` |
+| staging | `make k8s-staging-build && make k8s-staging-apply` | configured by cluster |
+| prod | `make k8s-prod-deploy` | configured by cluster |
 
 ## Commands
 
-| Command                                  | Description              |
-| ---------------------------------------- | ------------------------ |
-| `./scripts/kumbi.sh setup`               | Install all dependencies |
-| `./scripts/kumbi.sh dev`                 | Start dev servers        |
-| `./scripts/kumbi.sh build`               | Production build         |
-| `./scripts/kumbi.sh test`                | Run all tests            |
-| `./scripts/kumbi.sh lint`                | Lint all code            |
-| `./scripts/kumbi.sh deploy`              | Docker Compose deploy    |
-| `./scripts/kumbi.sh seed admin <email> <pass>` | Create/update admin user |
-| `./scripts/kumbi.sh create-user <name> <email> <pass> [role]` | Create any user |
-| `./scripts/kumbi.sh k8s dev <cmd>`       | Podman pod (dev/test)    |
-| `./scripts/kumbi.sh k8s prod <cmd>`      | microk8s deploy (prod)   |
+**Setup & build**
 
-## Kubernetes / microk8s
+| Command | Description |
+|---------|-------------|
+| `make setup` | Install all dependencies |
+| `make build` | Build frontend bundle + backend binary |
+| `make test` | Run all tests |
+| `make lint` | Lint all code |
 
-The project supports two Kubernetes-based deployment modes:
+**Dev (k3d)**
 
-- **Dev/Test** — Podman pods (no cluster required, fast iteration)
-- **Production** — microk8s with containerd (full cluster)
+| Command | Description |
+|---------|-------------|
+| `make dev` | Build images, deploy to local k3d cluster |
+| `make k3d-create` | Create dev k3d cluster only |
+| `make k3d-delete` | Delete dev k3d cluster |
+| `make k8s-dev-down` | Remove kumbi namespace from dev cluster |
+| `make k8s-dev-seed` | Re-run seed-admin job |
+| `make k8s-status` | Show pods, services, ingress |
 
-### Why no `overlays/` folder?
+**Test (separate k3d cluster)**
 
-`overlays/` is a [Kustomize](https://kustomize.io/) convention (`base/` + `overlays/dev/` + `overlays/prod/`). This project does **not** use Kustomize — environment differences are handled by plain shell scripts (`pod.sh` for dev, `deploy.sh` for prod) that read from `secrets.env` / `secrets.yaml`. The `dev/` and `prod/` folders sit alongside `base/` as peers, which is the correct layout for this shell-script-driven approach. If Kustomize is adopted in the future, `dev/` and `prod/` would move under an `overlays/` directory.
+| Command | Description |
+|---------|-------------|
+| `make k8s-test-up` | Build, load, deploy test overlay |
+| `make k8s-test-down` | Remove kumbi-test namespace |
+| `make k3d-test-create` | Create test k3d cluster only |
+| `make k3d-test-delete` | Delete test k3d cluster |
 
-### Dev/Test with Podman Pods
+**Docker Compose (local tooling helper)**
 
-Requires: `podman`
+| Command | Description |
+|---------|-------------|
+| `make compose-up` | Build and start all services |
+| `make compose-down` | Stop and remove containers |
+| `make compose-logs` | Tail all service logs |
 
-```bash
-# Start all services in a pod (postgres, backend, frontend)
-./scripts/kumbi.sh k8s dev up
+**Kubernetes — dev**
 
-# Tail logs for a specific service
-./scripts/kumbi.sh k8s dev logs backend
+| Command | Description |
+|---------|-------------|
+| `make k8s-dev-up` | Build images, import into microk8s, apply dev overlay |
+| `make k8s-dev-down` | Remove all kumbi resources from cluster |
+| `make k8s-dev-seed` | Re-run seed-admin job |
+| `make k8s-status` | Show pods, services, ingress |
 
-# Show pod status
-./scripts/kumbi.sh k8s dev status
+**Kubernetes — prod**
 
-# Create admin user
-./scripts/kumbi.sh k8s dev seed admin@kumbi.local yourpassword
+| Command | Description |
+|---------|-------------|
+| `make k8s-prod-build` | Build and push images to registry |
+| `make k8s-prod-apply` | Apply prod overlay |
+| `make k8s-prod-rollout` | Restart deployments |
+| `make k8s-prod-seed` | Run seed-admin job |
+| `make k8s-prod-deploy` | Full deploy: build + apply + rollout + seed |
+| `make k8s-teardown` | Delete kumbi namespace (destructive) |
 
-# Stop and remove pod
-./scripts/kumbi.sh k8s dev down
-```
+**User management**
 
-Services are exposed on the host:
+| Command | Description |
+|---------|-------------|
+| `make seed` | Seed/reset admin user |
+| `make create-user NAME=.. EMAIL=.. PASS=.. ROLE=..` | Create any user |
 
-| Service  | URL                        |
-| -------- | -------------------------- |
-| Frontend | http://localhost:5173       |
-| Backend  | http://localhost:8080       |
-| Postgres | localhost:5432              |
-
-### Production with microk8s
-
-Requires: `microk8s`, `podman`
-
-#### 1. Enable required microk8s addons
-
-```bash
-microk8s enable dns ingress registry storage
-```
-
-#### 2. Configure production secrets
-
-Edit `k8s/prod/secrets.yaml` — replace all `CHANGE_ME` placeholders:
-
-```yaml
-# backend-secret
-JWT_SECRET: your_long_random_secret
-DATABASE_URL: postgres://kumbi:your_db_pass@postgres:5432/kumbi?sslmode=disable
-ALLOW_ORIGIN: https://yourdomain.com
-SEED_ADMIN_EMAIL: admin@kumbi.local
-SEED_ADMIN_PASSWORD: your_admin_password
-
-# postgres-secret
-POSTGRES_PASSWORD: your_db_pass
-```
-
-> `DATABASE_URL` and `POSTGRES_PASSWORD` must use the same password. `secrets.yaml` is applied before the postgres manifest so the password is never hardcoded in the cluster.
-
-#### 3. Build, deploy, and seed
-
-```bash
-# Build images with podman and import into microk8s containerd, then apply manifests
-./scripts/kumbi.sh k8s prod deploy
-
-# Or step by step:
-./scripts/kumbi.sh k8s prod build    # build + import images
-./scripts/kumbi.sh k8s prod apply    # apply k8s manifests
-./scripts/kumbi.sh k8s prod rollout  # restart deployments
-
-# Check status
-./scripts/kumbi.sh k8s prod status
-
-# Create admin user
-./scripts/kumbi.sh k8s prod seed admin@kumbi.local yourpassword
-
-# Tear down (destructive — deletes namespace)
-./scripts/kumbi.sh k8s prod teardown
-```
-
-#### Environment variables for prod build
-
-| Variable           | Default              | Description                        |
-| ------------------ | -------------------- | ---------------------------------- |
-| `REGISTRY`         | `localhost:32000`    | microk8s built-in registry address |
-| `TAG`              | `latest`             | Image tag                          |
-| `VITE_API_BASE_URL`| `http://localhost:8080` | Frontend API base URL (baked at build time) |
-
-```bash
-REGISTRY=localhost:32000 TAG=v1.2.0 VITE_API_BASE_URL=https://api.yourdomain.com \
-  ./scripts/kumbi.sh k8s prod deploy
-```
+Run `make help` for the full list with descriptions.
 
 ## Project Structure
 
@@ -191,126 +128,111 @@ kumbi/
 │       ├── db/        # Connection, migrations
 │       ├── models/    # Data models
 │       └── services/  # Email/WhatsApp notifier
-├── k8s/               # Kubernetes manifests and scripts
-│   ├── base/          # Shared manifests (namespace, postgres, backend, frontend, ingress)
-│   ├── dev/           # Podman pod script (pod.sh) + dev secrets template
-│   ├── prod/          # microk8s deploy script (deploy.sh) + prod secrets template
-│   └── k8s.sh         # Entry point — delegates to dev/ or prod/
+├── infra/
+│   └── k8s/           # Kubernetes manifests (Kustomize)
+│       ├── base/      # Shared manifests
+│       └── overlays/
+│           ├── dev/   # microk8s dev overlay + secrets template
+│           └── prod/  # Production overlay + secrets template
 ├── docs/              # Extended documentation
-│   ├── architecture.md
-│   ├── backend.md
-│   ├── frontend.md
-│   ├── cms-guide.md
-│   ├── deployment.md
-│   └── api.md
-├── scripts/           # Build/deploy scripts
-│   └── kumbi.sh       # Main CLI
-├── docker-compose.yml
+├── .env.example       # Native dev secrets template
+├── docker-compose.yml # All-in-one Compose config
+├── Makefile           # Main CLI
 └── .github/workflows/ # CI/CD
+```
+
+## Kubernetes / microk8s
+
+The project uses **microk8s** for both local development and production. Manifests are managed with **Kustomize** overlays — no Helm, no custom shell scripts.
+
+### Why Kustomize overlays?
+
+`base/` contains environment-agnostic manifests. `overlays/dev/` and `overlays/prod/` patch only what differs (image tags, pull policy, env values). This keeps the base DRY and makes environment differences explicit and reviewable.
+
+### Dev workflow
+
+```bash
+make k8s-dev-up          # build images, microk8s import, kubectl apply -k overlays/dev
+make k8s-status          # pods, services, ingress
+make k8s-dev-seed        # re-run seed-admin job
+make k8s-dev-down        # kubectl delete namespace kumbi
+```
+
+### Production workflow
+
+```bash
+# Set secrets
+cp infra/k8s/overlays/prod/secrets.yaml.example infra/k8s/overlays/prod/secrets.yaml
+# Edit secrets.yaml — replace all CHANGE_ME values
+
+# Deploy
+REGISTRY=registry.example.com TAG=v1.0.0 VITE_API_BASE_URL=https://api.example.com \
+  make k8s-prod-deploy
 ```
 
 ## Secrets Management
 
-Secrets are never committed to the repository for k8s deployments. For the Docker Compose path, `docker-compose.yml` uses a dev-only hardcoded password — replace it or use `${VAR}` substitution for production Docker Compose use.
+Secrets live entirely within the infra stack and are never committed.
 
-### Dev/Test (Podman pod or Docker Compose)
+| Context | Location |
+|---------|----------|
+| Native dev / Docker Compose | `.env` (copy from `.env.example`) |
+| Kubernetes dev | `infra/k8s/overlays/dev/secrets.yaml` (copy from `.example`) |
+| Kubernetes prod | `infra/k8s/overlays/prod/secrets.yaml` (copy from `.example`) |
 
-All local workflows — native dev, Docker Compose, and Podman pod — read from the same file:
+`.env` is only read by native dev and Docker Compose. Kubernetes reads exclusively from its own Secret manifests in `infra/k8s/overlays/`.
 
-```bash
-# One-time setup
-cp k8s/dev/secrets.env.example k8s/dev/secrets.env
-# Edit k8s/dev/secrets.env with your values
-```
-
-`secrets.env` is sourced by both `kumbi.sh` (for native dev and Docker Compose) and `pod.sh` (for the Podman pod). The backend reads vars directly from the environment — no `backend/.env` file is used.
-
-### Production (microk8s)
-
-```bash
-# One-time setup
-cp k8s/prod/secrets.yaml.example k8s/prod/secrets.yaml
-# Edit k8s/prod/secrets.yaml — replace all CHANGE_ME values
-```
-
-`secrets.yaml` is applied as a Kubernetes Secret before the backend deployment. The backend pod reads all secrets from the `backend-secret` Secret via `envFrom`.
-
-> **Never commit `k8s/dev/secrets.env` or `k8s/prod/secrets.yaml`.** Both are gitignored. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.) in CI/CD and inject via environment or `kubectl apply`.
+> For CI/CD, inject secrets via AWS Secrets Manager, HashiCorp Vault, or `kubectl create secret` from CI environment variables. Never store real secrets in the repository.
 
 ### All secrets / environment variables
 
-#### Backend (`backend-secret` / `secrets.env`)
+#### Backend
 
-| Key                    | Required | Default              | Description                              |
-| ---------------------- | -------- | -------------------- | ---------------------------------------- |
-| `DATABASE_URL`         | ✅       | —                    | PostgreSQL connection string             |
-| `JWT_SECRET`           | ✅       | —                    | Min 32-char random string                |
-| `ALLOW_ORIGIN`         |          | `http://localhost:5173` | Allowed CORS origin                   |
-| `PORT`                 |          | `8080`               | HTTP listen port                         |
-| `ENV`                  |          | `development`        | Runtime environment (`development` / `production`) |
-| `STORAGE_PATH`         |          | `./storage`          | Filesystem path for uploaded media       |
-| `SMTP_HOST`            |          | —                    | SMTP server hostname                     |
-| `SMTP_PORT`            |          | `587`                | SMTP server port                         |
-| `SMTP_USER`            |          | —                    | SMTP username                            |
-| `SMTP_PASS`            |          | —                    | SMTP password                            |
-| `WHATSAPP_WEBHOOK_URL` |          | —                    | WhatsApp notification webhook URL        |
-| `SEED_ADMIN_EMAIL`     |          | `admin@kumbi.local`  | Default admin email (seed job)           |
-| `SEED_ADMIN_PASSWORD`  |          | —                    | Default admin password (seed job)        |
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `DATABASE_URL` | ✅ | — | PostgreSQL connection string |
+| `JWT_SECRET` | ✅ | — | Min 32-char random string |
+| `ALLOW_ORIGIN` | | `http://localhost:5173` | Allowed CORS origin |
+| `PORT` | | `8080` | HTTP listen port |
+| `ENV` | | `development` | Runtime environment |
+| `STORAGE_PATH` | | `./storage` | Filesystem path for uploaded media |
+| `SMTP_HOST` | | — | SMTP server hostname |
+| `SMTP_PORT` | | `587` | SMTP server port |
+| `SMTP_USER` | | — | SMTP username |
+| `SMTP_PASS` | | — | SMTP password |
+| `WHATSAPP_WEBHOOK_URL` | | — | WhatsApp notification webhook URL |
+| `SEED_ADMIN_EMAIL` | | `admin@kumbi.local` | Default admin email |
+| `SEED_ADMIN_PASSWORD` | | — | Default admin password |
 
-#### Database (`postgres-secret` / `secrets.env`)
+#### Database
 
-| Key                 | Required | Description                    |
-| ------------------- | -------- | ------------------------------ |
-| `POSTGRES_PASSWORD` | ✅       | Postgres superuser password    |
+| Key | Required | Description |
+|-----|----------|-------------|
+| `POSTGRES_PASSWORD` | ✅ | Postgres superuser password |
 
 > `DATABASE_URL` and `POSTGRES_PASSWORD` must use the same password.
 
-#### Frontend (Vite build args — baked at build time, not runtime env vars)
+#### Frontend (Vite build args — baked at build time)
 
-Vite replaces `VITE_*` variables at bundle time. They are passed as `--build-arg` to `podman build` / `docker build` and are **not** available at container runtime.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE_URL` | `http://localhost:8080` | Backend API base URL |
 
-| Variable            | Default                  | Description                        |
-| ------------------- | ------------------------ | ---------------------------------- |
-| `VITE_API_BASE_URL` | `http://localhost:8080`  | Backend API base URL               |
+#### Kubernetes prod build
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REGISTRY` | `registry.localhost:5000` | Container registry |
+| `TAG` | `latest` | Image tag |
 
 ## User Management
 
-The default admin account (`admin@kumbi.local`) is seeded automatically on first deploy.
-
-### Dev/Test
-
 ```bash
-# Reset/seed default admin (reads SEED_ADMIN_* from secrets.env)
-./scripts/kumbi.sh k8s dev seed
+# Seed/reset default admin
+make seed
 
-# Create an additional admin user
-./scripts/kumbi.sh k8s dev create-user "Jane Doe" jane@kumbi.local password123
-
-# Create an editor
-./scripts/kumbi.sh k8s dev create-user "Bob" bob@kumbi.local password123 editor
-```
-
-### Production
-
-```bash
-# Seed default admin (runs seed-admin Job, idempotent)
-./scripts/kumbi.sh k8s prod seed
-
-# Create an additional admin user
-./scripts/kumbi.sh k8s prod create-user "Jane Doe" jane@kumbi.local password123
-
-# Create an editor
-./scripts/kumbi.sh k8s prod create-user "Bob" bob@kumbi.local password123 editor
-```
-
-### Local (Docker Compose / direct)
-
-```bash
-# Seed default admin
-./scripts/kumbi.sh seed admin admin@kumbi.local yourpassword
-
-# Create any user
-./scripts/kumbi.sh create-user "Jane Doe" jane@kumbi.local password123 admin
+# Create additional users
+make create-user NAME="Jane Doe" EMAIL=jane@kumbi.local PASS=password123 ROLE=editor
 ```
 
 Available roles: `admin`, `editor`, `viewer`
@@ -328,14 +250,14 @@ Available roles: `admin`, `editor`, `viewer`
 
 ## Public Pages
 
-| Route             | Page                                        |
-| ----------------- | ------------------------------------------- |
-| `/`               | Home (parallax, project highlights) — implemented |
-| `/projects`       | All projects — placeholder                  |
-| `/projects/trace` | Trace data/notebooks — placeholder          |
-| `/blog`           | Social work blog — placeholder              |
-| `/about`          | About us — placeholder                      |
-| `/contact`        | Contact form                                |
-| `/volunteer`      | Volunteer info + slide-in registration form |
-| `/login`          | CMS login                                   |
-| `/cms`            | CMS dashboard (protected)                   |
+| Route | Page |
+|-------|------|
+| `/` | Home (parallax, project highlights) |
+| `/projects` | All projects |
+| `/projects/trace` | Trace data/notebooks |
+| `/blog` | Social work blog |
+| `/about` | About us |
+| `/contact` | Contact form |
+| `/volunteer` | Volunteer info + slide-in registration form |
+| `/login` | CMS login |
+| `/cms` | CMS dashboard (protected) |

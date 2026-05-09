@@ -1,16 +1,27 @@
+# Local secrets — never commit
 .env
 backend/.env
 frontend/.env
+
+# Build artifacts
 backend/bin/
+backend/server
+backend/seed
 frontend/dist/
 frontend/node_modules/
+
+# Storage
 storage/
+backend/storage/
+
+# Logs
 *.log
+
+# OS
 .DS_Store
-docs/
-scripts/
 
 # K8s secrets — never commit real values
-k8s/dev/secrets.env
-k8s/prod/secrets.yaml
-
+infra/k8s/overlays/dev/secrets.yml
+infra/k8s/overlays/dev/secrets.yml
+infra/k8s/overlays/prod/secrets.yaml
+infra/k8s/overlays/prod/secrets.yaml

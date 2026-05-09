@@ -4,9 +4,6 @@ kind: Job
 metadata:
   name: seed-admin
   namespace: kumbi
-  annotations:
-    # Re-run by deleting the job: kubectl delete job seed-admin -n kumbi
-    description: "Seeds the default admin@kumbi.local account. Idempotent."
 spec:
   ttlSecondsAfterFinished: 300
   backoffLimit: 3
@@ -19,10 +16,7 @@ spec:
           command:
             - sh
             - -c
-            - |
-              until pg_isready -h postgres -U kumbi; do
-                echo "waiting for postgres..."; sleep 2
-              done
+            - until pg_isready -h postgres -U kumbi; do echo "waiting for postgres..."; sleep 2; done
           env:
             - name: PGPASSWORD
               valueFrom:
@@ -31,7 +25,7 @@ spec:
                   key: POSTGRES_PASSWORD
       containers:
         - name: seed
-          image: localhost:32000/kumbi/backend:latest
+          image: kumbi/backend:latest
           command:
             - /app/seed
             - admin

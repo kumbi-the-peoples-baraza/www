@@ -8,11 +8,6 @@ data:
   ENV: production
   STORAGE_PATH: /app/storage
 ---
-# backend-secret is applied from k8s/prod/secrets.yaml (prod) or k8s/dev/pod.sh (dev)
-# It must contain: DATABASE_URL, JWT_SECRET, ALLOW_ORIGIN
-# Optional: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, WHATSAPP_WEBHOOK_URL
-# Seed: SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -41,7 +36,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: localhost:32000/kumbi/backend:latest
+          image: kumbi/backend:latest
           envFrom:
             - configMapRef:
                 name: backend-config

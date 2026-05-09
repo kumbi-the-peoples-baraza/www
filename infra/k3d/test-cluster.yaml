@@ -1,0 +1,27 @@
+# k3d cluster config — kumbi-test
+# Separate cluster for test environment; runs alongside dev.
+#
+# Usage: k3d cluster create --config infra/k3d/test-cluster.yaml
+
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  name: kumbi-test
+
+servers: 1
+agents: 0
+
+image: rancher/k3s:v1.33.6-k3s1
+
+ports:
+  - port: 8080:80
+    nodeFilters: [loadbalancer]
+
+options:
+  k3s:
+    extraArgs:
+      - arg: --kube-proxy-arg=conntrack-max-per-core=0
+        nodeFilters: [server:*]
+      - arg: --kubelet-arg=feature-gates=KubeletInUserNamespace=true
+        nodeFilters: [server:*]

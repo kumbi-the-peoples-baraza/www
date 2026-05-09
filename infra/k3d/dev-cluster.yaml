@@ -1,0 +1,35 @@
+# k3d cluster config — kumbi-dev
+# Matches the running cluster created with rootless Docker.
+#
+# Usage: k3d cluster create --config infra/k3d/dev-cluster.yaml
+#
+# NOTE: k3d image import does NOT work with rootless Docker.
+# Use: docker save <img> | docker exec -i k3d-kumbi-dev-server-0 ctr images import -
+# Or:  make k8s-dev-up  (handles this automatically)
+
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  name: kumbi-dev
+
+servers: 1
+agents: 0
+
+image: rancher/k3s:v1.33.6-k3s1
+
+ports:
+  - port: 80:80
+    nodeFilters: [loadbalancer]
+  - port: 443:443
+    nodeFilters: [loadbalancer]
+
+# Required for rootless Docker / KubeletInUserNamespace
+options:
+  k3s:
+    extraArgs:
+      - arg: --kube-proxy-arg=conntrack-max-per-core=0
+        nodeFilters: [server:*]
+      - arg: --kubelet-arg=feature-gates=KubeletInUserNamespace=true
+        nodeFilters: [server:*]
+      # Do NOT disable servicelb — Traefik's LoadBalancer service needs it

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: localhost:32000/kumbi/frontend:latest
+          image: kumbi/frontend:latest
           ports:
             - containerPort: 80
           readinessProbe:

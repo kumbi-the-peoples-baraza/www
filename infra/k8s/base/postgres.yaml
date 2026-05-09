@@ -8,7 +8,7 @@ data:
   POSTGRES_DB: kumbi
   POSTGRES_USER: kumbi
 ---
-# postgres-secret (POSTGRES_PASSWORD) is applied from k8s/prod/secrets.yaml
+# postgres-secret (POSTGRES_PASSWORD) is applied from the overlay secrets.yaml
 # Do NOT define it here — it would overwrite the value from secrets.yaml.
 ---
 apiVersion: v1

@@ -1,0 +1,15 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - secrets.yaml
+
+images:
+  - name: kumbi/backend
+    newName: ${REGISTRY}/kumbi/backend
+    newTag: ${TAG}
+  - name: kumbi/frontend
+    newName: ${REGISTRY}/kumbi/frontend
+    newTag: ${TAG}
