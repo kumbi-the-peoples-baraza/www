@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Heart, Target, Eye } from 'lucide-react'
 import PageHero from '@/components/ui/PageHero'
+import { useConfig } from '@/hooks/useConfig'
 
 const values = [
   { icon: Heart,  title: 'Community First', desc: 'Every decision we make is guided by the needs and voices of the communities we serve.' },
@@ -9,13 +10,15 @@ const values = [
 ]
 
 export default function About() {
+  const cfg = useConfig()
+  const storyParagraphs = (cfg.pages.about.story || '').split('\n\n').filter(Boolean)
   return (
     <>
       <PageHero
         title="About Kumbi"
         subtitle="The People's Baraza — a civic technology organisation rooted in Nairobi, Kenya."
         tag="Who We Are"
-        img="https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop"
+        img={cfg.pages.about.heroImage}
       />
 
       <div className="section">
@@ -30,15 +33,13 @@ export default function About() {
             transition={{ duration: 0.5 }}
           >
             <h2 className="text-3xl font-black mb-6 tracking-tight">Our Story</h2>
-            <p className="text-muted-foreground leading-relaxed mb-5">
-              Kumbi was founded in the wake of the 2024 Nairobi protests, when the scale of enforced disappearances made clear that communities needed better tools to protect themselves and hold power to account.
-            </p>
-            <p className="text-muted-foreground leading-relaxed mb-5">
-              We build civic technology that is open, accessible, and designed for the realities of life in Kenya — from KumbiTrace's crowd-sourced missing persons database to KumbiVote's blockchain-secured elections platform.
-            </p>
-            <p className="text-muted-foreground leading-relaxed">
-              Based in Nairobi, we work with communities across Kenya to ensure that technology serves people — not the other way around.
-            </p>
+            {storyParagraphs.length > 0
+              ? storyParagraphs.map((p, i) => <p key={i} className="text-muted-foreground leading-relaxed mb-4">{p}</p>)
+              : <>
+                  <p className="text-muted-foreground leading-relaxed mb-4">Kumbi was founded in the wake of the 2024 Nairobi protests, when the scale of enforced disappearances made clear that communities needed better tools to protect themselves and hold power to account.</p>
+                  <p className="text-muted-foreground leading-relaxed mb-4">We build civic technology that is open, accessible, and designed for the realities of life in Kenya.</p>
+                </>
+            }
           </motion.div>
 
           {/* Values */}

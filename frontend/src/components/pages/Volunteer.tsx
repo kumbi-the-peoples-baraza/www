@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Heart, Code, Megaphone, Handshake } from 'lucide-react'
 import { useVolunteerStore } from '@/store/volunteerStore'
 import PageHero from '@/components/ui/PageHero'
+import { useConfig } from '@/hooks/useConfig'
 
 const roles = [
   { icon: Code,       title: 'Technology',    desc: 'Developers, designers, data scientists — help us build and improve our platforms.' },
@@ -12,6 +13,7 @@ const roles = [
 
 export default function Volunteer() {
   const { open } = useVolunteerStore()
+  const cfg = useConfig()
 
   return (
     <>
@@ -19,7 +21,7 @@ export default function Volunteer() {
         title="Volunteer with Kumbi"
         subtitle="Join hundreds of changemakers already working to transform communities across Kenya."
         tag="Get Involved"
-        img="https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop"
+        img={cfg.pages.volunteer.heroImage}
       />
       <div className="section">
         <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="text-center mb-14">

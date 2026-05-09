@@ -3,6 +3,7 @@ import { pagesApi } from '@/api/client'
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, Archive } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
+import RichTextarea from '@/components/ui/RichTextarea'
 import type { Page } from '@/types'
 
 const DISPLAY_MODES = ['full', 'modal', 'overlay', 'carousel', 'hero', 'link'] as const
@@ -73,8 +74,13 @@ export default function Pages() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm font-medium mb-1.5 block">Description</label>
-              <textarea value={editing.description || ''} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={3} className="input-field" />
+              <label className="form-label">Description</label>
+              <RichTextarea
+                key={editing.id || 'new'}
+                initialContent={editing.description || ''}
+                onChange={val => setEditing(prev => ({ ...prev, description: val }))}
+                placeholder="Page description or intro text…"
+              />
             </div>
           </div>
           <div className="flex gap-3 mt-4">

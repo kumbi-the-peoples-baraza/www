@@ -98,10 +98,11 @@ export default function Navbar() {
             {isAuthenticated ? (
               <Link
                 to="/cms"
-                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-primary/10 transition-colors font-black text-xs text-primary"
                 title="CMS Dashboard"
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-primary/10 transition-colors"
+                style={{ color: 'hsl(var(--nav-fg) / 0.7)' }}
               >
-                CMS
+                <IconLock />
               </Link>
             ) : (
               <button

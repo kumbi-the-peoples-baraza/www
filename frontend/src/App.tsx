@@ -23,6 +23,8 @@ const CMSUsers = lazy(() => import('@/components/cms/Users'))
 const CMSAnalytics = lazy(() => import('@/components/cms/Analytics'))
 const CMSAppearance = lazy(() => import('@/components/cms/Appearance'))
 const CMSNotebooks = lazy(() => import('@/components/cms/Notebooks'))
+const CMSBlog = lazy(() => import('@/components/cms/Blog'))
+const CMSSiteContent = lazy(() => import('@/components/cms/SiteContent'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -71,6 +73,8 @@ export default function App() {
             <Route path="analytics" element={<CMSAnalytics />} />
             <Route path="appearance" element={<CMSAppearance />} />
             <Route path="notebooks" element={<CMSNotebooks />} />
+              <Route path="blog" element={<CMSBlog />} />
+              <Route path="site-content" element={<CMSSiteContent />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -85,10 +85,33 @@ export const usersApi = {
   delete: (id: string) => api.delete(`/users/${id}`),
 }
 
-// Analytics
+// Blog
+export const blogApi = {
+  list: () => api.get('/blog'),
+  listAll: () => api.get('/blog/all'),   // CMS — includes drafts
+  get: (slug: string) => api.get(`/blog/${slug}`),
+  create: (data: unknown) => api.post('/blog', data),
+  update: (id: string, data: unknown) => api.put(`/blog/${id}`, data),
+  delete: (id: string) => api.delete(`/blog/${id}`),
+}
+
+// Site config (editable text, images, nav, footer)
+export const configApi = {
+  get: () => api.get('/config'),
+  update: (data: unknown) => api.put('/config', data),
+}
+
+// Analytics / tracking
 export const analyticsApi = {
   get: () => api.get('/analytics'),
   update: (config: Record<string, unknown>) => api.put('/analytics', { config }),
+  stats: () => api.get('/analytics/stats'),
+  track: (path: string, referrer: string) => api.post('/track', { path, referrer }),
+}
+
+// Dashboard
+export const dashboardApi = {
+  stats: () => api.get('/dashboard/stats'),
 }
 
 // Appearance

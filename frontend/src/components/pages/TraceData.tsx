@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Search, BarChart3, Users, AlertTriangle } from 'lucide-react'
 import PageHero from '@/components/ui/PageHero'
+import { useConfig } from '@/hooks/useConfig'
 
 const features = [
   { icon: Search,        title: 'Crowd-sourced Reports',   desc: 'Anyone can submit a missing persons report with photos, last known location, and circumstances.' },
@@ -10,13 +11,14 @@ const features = [
 ]
 
 export default function TraceData() {
+  const cfg = useConfig()
   return (
     <>
       <PageHero
         title="KumbiTrace"
         subtitle="A crowd-sourced missing persons tracking and data analysis platform — born from the 2024 Nairobi protests."
         tag="Missing Persons · Data"
-        img="https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop"
+        img={cfg.pages.trace.heroImage}
       />
       <div className="section">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-7 mb-16">

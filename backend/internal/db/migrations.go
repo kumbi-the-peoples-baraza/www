@@ -96,6 +96,87 @@ CREATE TABLE IF NOT EXISTS analytics_config (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS page_views (
+    id         BIGSERIAL PRIMARY KEY,
+    path       TEXT NOT NULL,
+    referrer   TEXT,
+    ua         TEXT,
+    country    TEXT,
+    ts         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS page_views_ts_idx ON page_views (ts DESC);
+CREATE INDEX IF NOT EXISTS page_views_path_idx ON page_views (path);
+
+-- site_config: all editable text, images, and links for the public site
+CREATE TABLE IF NOT EXISTS site_config (
+    id      TEXT PRIMARY KEY DEFAULT 'default',
+    data    JSONB NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO site_config (id, data) VALUES ('default', $site_config_seed${
+  "nav": { "brand": "Kumbi", "tagline": "The People's Baraza" },
+  "hero": {
+    "heading": "Building a Better Community Together",
+    "subheading": "Kumbi drives meaningful change across Kenya through data, democracy, and dedicated social work.",
+    "image": "https://images.unsplash.com/photo-1489392191049-fc10c97e64b6?w=1920&q=90&auto=format&fit=crop",
+    "ctaPrimary": "Explore Projects",
+    "ctaSecondary": "Learn More"
+  },
+  "projects": {
+    "heading": "Our Projects",
+    "subheading": "Three pillars of community transformation driving real, measurable impact across Kenya.",
+    "tagline": "Empowering communities — one project at a time",
+    "backgroundImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80&auto=format&fit=crop",
+    "items": [
+      { "id": "trace", "title": "KumbiTrace", "tag": "Missing Persons · Data", "link": "/projects/trace",
+        "description": "Born from the 2024 Nairobi protests, KumbiTrace is a crowd-sourced platform for tracking enforced disappearances.",
+        "image": "https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=900&q=80&auto=format&fit=crop" },
+      { "id": "vote", "title": "KumbiVote", "tag": "Blockchain · Elections", "link": "/projects",
+        "description": "A bulletproof blockchain-based distributed elections management platform built for Africa.",
+        "image": "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=900&q=80&auto=format&fit=crop" },
+      { "id": "social", "title": "Social Work", "tag": "Community · Volunteers", "link": "/blog",
+        "description": "Connecting volunteers with communities in need through coordinated social programmes across Kenya.",
+        "image": "https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=900&q=80&auto=format&fit=crop" }
+    ]
+  },
+  "volunteer": {
+    "heading": "Ready to Make a Difference?",
+    "subheading": "Join hundreds of volunteers already working with Kumbi to transform communities across Nairobi and Kenya.",
+    "cta": "Volunteer with Kumbi",
+    "backgroundImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80&auto=format&fit=crop"
+  },
+  "footer": {
+    "about": "Driving meaningful change across Kenya through data, democracy, and dedicated social work.",
+    "address": "Ngong Road, Kilimani",
+    "city": "Nairobi, Kenya",
+    "email": "hello@kumbi.org",
+    "phone": "+254 700 000 000",
+    "copyright": "© 2026 The People's Baraza. All Rights Reserved."
+  },
+  "pages": {
+    "about":    { "heroImage": "https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop", "story": "" },
+    "projects": { "heroImage": "https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop" },
+    "blog":     { "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop" },
+    "volunteer":{ "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop" },
+    "trace":    { "heroImage": "https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop" }
+  }
+}$site_config_seed$) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS blog_posts (
+    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    slug         TEXT UNIQUE NOT NULL,
+    title        TEXT NOT NULL,
+    excerpt      TEXT NOT NULL DEFAULT '',
+    body         TEXT NOT NULL DEFAULT '',
+    cover_image  TEXT,
+    status       TEXT NOT NULL DEFAULT 'draft',
+    author_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+    published_at TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Seed default appearance
 INSERT INTO appearance (id) VALUES (uuid_generate_v4()) ON CONFLICT DO NOTHING;
 

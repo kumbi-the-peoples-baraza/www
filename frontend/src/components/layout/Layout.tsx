@@ -6,11 +6,17 @@ import VolunteerSheet from '@/components/forms/VolunteerSheet'
 import AccessibilityWidget from '@/components/ui/AccessibilityWidget'
 import ContactOverlay from '@/components/ui/ContactOverlay'
 import { useContactStore } from '@/store/contactStore'
+import { analyticsApi } from '@/api/client'
 
 export default function Layout() {
   const { isOpen, open, close } = useContactStore()
   const location = useLocation()
   const navigate = useNavigate()
+
+  // Track page views
+  useEffect(() => {
+    analyticsApi.track(location.pathname, document.referrer).catch(() => {})
+  }, [location.pathname])
 
   // /contact route → open overlay, go back
   useEffect(() => {

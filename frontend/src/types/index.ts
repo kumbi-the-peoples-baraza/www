@@ -1,3 +1,17 @@
+export interface BlogPost {
+  id: string
+  slug: string
+  title: string
+  excerpt: string
+  body: string
+  coverImage?: string
+  status: 'published' | 'draft' | 'archived'
+  authorId?: string
+  publishedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Page {
   id: string
   slug: string

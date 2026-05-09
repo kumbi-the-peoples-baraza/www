@@ -706,3 +706,84 @@ Delete a content block.
 ```json
 { "message": "deleted" }
 ```
+
+---
+
+## Site Config
+
+Single-document store for all editable public-site content (nav, hero, projects, volunteer section, footer, page hero images). Edited via the CMS **Site Content** page.
+
+### GET `/config`
+
+Returns the full site config JSON. Public — no auth required.
+
+**Response (200):** Full `SiteConfig` object (see `frontend/src/hooks/useConfig.ts` for the shape).
+
+---
+
+### PUT `/config`
+
+Replace the site config. **Headers:** `Authorization: Bearer <jwt>` (admin or editor)
+
+**Request:** Full or partial `SiteConfig` JSON object.
+
+**Response (200):**
+```json
+{ "message": "updated" }
+```
+
+---
+
+## Blog
+
+### GET `/blog`
+
+List published blog posts (public).
+
+**Response (200):** Array of post objects with `id`, `slug`, `title`, `excerpt`, `body`, `coverImage`, `status`, `publishedAt`, `createdAt`.
+
+---
+
+### GET `/blog/:slug`
+
+Get a single published post by slug (public).
+
+---
+
+### GET `/blog/all`
+
+List all posts including drafts. **Headers:** `Authorization: Bearer <jwt>`
+
+---
+
+### POST `/blog`
+
+Create a blog post. **Headers:** `Authorization: Bearer <jwt>` (admin or editor)
+
+**Request:**
+```json
+{
+  "slug": "my-post",
+  "title": "My Post",
+  "excerpt": "Short summary",
+  "body": "<p>HTML body from rich text editor</p>",
+  "coverImage": "https://...",
+  "status": "draft"
+}
+```
+
+Setting `status: "published"` automatically sets `published_at` to now.
+
+---
+
+### PUT `/blog/:id`
+
+Update a blog post. **Headers:** `Authorization: Bearer <jwt>` (admin or editor)
+
+All fields optional (PATCH semantics).
+
+---
+
+### DELETE `/blog/:id`
+
+Delete a blog post. **Headers:** `Authorization: Bearer <jwt>` (admin)

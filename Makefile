@@ -53,6 +53,8 @@ help:
 	@echo ""
 	@echo "  $(BOLD)Dev (k3d — identical infra to all environments)$(RESET)"
 	@echo "    make dev            Build images, load into k3d, deploy dev overlay"
+	@echo "    make refresh        Rebuild images + redeploy (fastest iteration loop)"
+	@echo "    make migrate        Re-run DB migrations (restarts backend pod)"
 	@echo "    make k8s-dev-up     Same as dev"
 	@echo "    make k8s-dev-down   Remove kumbi namespace from dev cluster"
 	@echo "    make k8s-dev-seed   Re-run seed-admin job"
@@ -142,6 +144,32 @@ compose-logs: ; docker compose logs -f
 # ── dev = k8s-dev-up ──────────────────────────────────────────────────────────
 .PHONY: dev
 dev: k8s-dev-up
+
+# ── refresh — rebuild images and redeploy to dev cluster (no cluster recreate) ─
+.PHONY: refresh
+refresh:
+	$(call log,Building images...)
+	docker build -t $(BACKEND_IMG):dev ./backend
+	docker build \
+	  --build-arg VITE_API_BASE_URL=$${VITE_API_BASE_URL:-http://localhost/api} \
+	  -t $(FRONTEND_IMG):dev ./frontend
+	$(call log,Importing images into k3d cluster '$(DEV_CLUSTER)'...)
+	$(call import-image,$(BACKEND_IMG):dev,$(DEV_CLUSTER))
+	$(call import-image,$(FRONTEND_IMG):dev,$(DEV_CLUSTER))
+	$(call log,Rolling out new images...)
+	$(KUBECTL_DEV) rollout restart deployment/backend deployment/frontend -n kumbi
+	$(KUBECTL_DEV) rollout status  deployment/backend deployment/frontend -n kumbi --timeout=120s
+	$(call log,Done — http://localhost)
+
+# ── migrate — trigger migrations by restarting the backend pod ────────────────
+# Migrations run automatically on every backend startup via db.Migrate().
+# This command forces a restart to re-run them against the current schema.
+.PHONY: migrate
+migrate:
+	$(call log,Restarting backend to run migrations...)
+	$(KUBECTL_DEV) rollout restart deployment/backend -n kumbi
+	$(KUBECTL_DEV) rollout status  deployment/backend -n kumbi --timeout=60s
+	$(call log,Migrations complete)
 
 # ── k8s dev overlay (k3d) ─────────────────────────────────────────────────────
 .PHONY: _dev-secrets-check
@@ -312,92 +340,3 @@ INFO  := \033[1;36m[kumbi]\033[0m
 log = @echo -e "$(INFO) $(1)"
 
 # ── Help ──────────────────────────────────────────────────────────────────────
-.PHONY: help
-help:
-	@echo ""
-	@echo "  $(BOLD)Kumbi — The People's Baraza$(RESET)"
-	@echo ""
-	@echo "  $(BOLD)Local dev (k8s — identical to all environments)$(RESET)"
-	@echo "    make setup          Install all dependencies"
-	@echo "    make dev            Build images and deploy to local k8s (dev overlay)"
-	@echo "    make build          Build frontend and backend binaries"
-	@echo "    make test           Run all tests"
-	@echo "    make lint           Lint all code"
-	@echo ""
-	@echo "  $(BOLD)Docker Compose (postgres-only helper)$(RESET)"
-	@echo "    make compose-up     Build and start all services"
-	@echo "    make compose-down   Stop and remove containers"
-	@echo "    make compose-logs   Tail all service logs"
-	@echo ""
-	@echo "  $(BOLD)Kubernetes — dev$(RESET)"
-	@echo "    make k8s-dev-up     Build images, import into k3s, apply dev overlay"
-	@echo "    make k8s-dev-down   Delete all kumbi resources from cluster"
-	@echo "    make k8s-dev-seed   Run seed-admin job"
-	@echo "    make k8s-status     Show pods, services, ingress"
-	@echo ""
-	@echo "  $(BOLD)Kubernetes — test$(RESET)"
-	@echo "    make k8s-test-up    Build images, import into k3s, apply test overlay"
-	@echo "    make k8s-test-down  Delete kumbi-test namespace"
-	@echo ""
-	@echo "  $(BOLD)Kubernetes — staging$(RESET)"
-	@echo "    make k8s-staging-build  Build and push staging images"
-	@echo "    make k8s-staging-apply  Apply staging overlay"
-	@echo ""
-	@echo "  $(BOLD)Kubernetes — prod$(RESET)"
-	@echo "    make k8s-prod-build Push images to registry"
-	@echo "    make k8s-prod-apply Apply prod overlay"
-	@echo "    make k8s-prod-rollout Restart deployments"
-	@echo "    make k8s-prod-seed  Run seed-admin job"
-	@echo "    make k8s-prod-deploy Full prod deploy (build + apply + rollout + seed)"
-	@echo "    make k8s-teardown   Delete kumbi namespace (destructive)"
-	@echo ""
-	@echo "  $(BOLD)User management$(RESET)"
-	@echo "    make seed           Seed/reset admin user"
-	@echo "    make create-user NAME=.. EMAIL=.. PASS=.. ROLE=.."
-	@echo ""
-	@echo "  Variables: REGISTRY=$(REGISTRY)  TAG=$(TAG)  KUBECTL=$(KUBECTL)"
-	@echo ""
-
-# ── Dependencies ──────────────────────────────────────────────────────────────
-.PHONY: setup
-setup:
-	$(call log,Installing frontend dependencies...)
-	cd frontend && bun install
-	$(call log,Downloading backend modules...)
-	cd backend && go mod download
-
-# ── dev = k8s dev (identical infra to all environments) ───────────────────────
-.PHONY: dev
-dev: k8s-dev-up
-
-.PHONY: build
-build:
-	$(call log,Building frontend...)
-	cd frontend && bun run build
-	$(call log,Building backend...)
-	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/server ./cmd/server
-	$(call log,Build complete)
-
-.PHONY: test
-test:
-	$(call log,Testing backend...)
-	cd backend && go test ./... -v
-	$(call log,Testing frontend...)
-	cd frontend && bun run test
-
-.PHONY: lint
-lint:
-	$(call log,Linting backend...)
-	cd backend && go vet ./...
-	$(call log,Linting frontend...)
-	cd frontend && bun run lint
-
-# ── Docker Compose (postgres-only helper for local tooling) ───────────────────
-.PHONY: compose-up
-compose-up:
-	docker compose up --build -d
-
-.PHONY: compose-down
-compose-down:
-	docker compose down
-
