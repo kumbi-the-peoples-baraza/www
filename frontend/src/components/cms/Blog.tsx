@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import RichTextarea from '@/components/ui/RichTextarea'
+import ImagePicker from '@/components/ui/ImagePicker'
 import type { BlogPost } from '@/types'
 
 type Draft = Partial<BlogPost>
@@ -81,14 +82,12 @@ export default function CMSBlog() {
             </div>
           </div>
 
+          <ImagePicker label="Cover Image" value={editing.coverImage || ''} onChange={v => setEditing({ ...editing, coverImage: v })} />
+
           <div>
-            <label className="form-label">Cover Image URL</label>
-            <input
-              value={editing.coverImage || ''}
-              onChange={e => setEditing({ ...editing, coverImage: e.target.value })}
-              className="input-field"
-              placeholder="https://... or /storage/..."
-            />
+            <label className="form-label">Cover Image Caption</label>
+            <input value={editing.coverCaption || ''} onChange={e => setEditing({ ...editing, coverCaption: e.target.value })}
+              className="input-field" placeholder="Describe the image — people, location, context…" />
           </div>
 
           <div>

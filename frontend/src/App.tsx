@@ -9,7 +9,9 @@ import { useAuthStore } from '@/store/authStore'
 const Home = lazy(() => import('@/components/pages/Home'))
 const Projects = lazy(() => import('@/components/pages/Projects'))
 const TraceData = lazy(() => import('@/components/pages/TraceData'))
+const KumbiVote = lazy(() => import('@/components/pages/KumbiVote'))
 const Blog = lazy(() => import('@/components/pages/Blog'))
+const BlogPostPage = lazy(() => import('@/components/pages/BlogPost'))
 const About = lazy(() => import('@/components/pages/About'))
 const Volunteer = lazy(() => import('@/components/pages/Volunteer'))
 const Login = lazy(() => import('@/components/pages/Login'))
@@ -25,6 +27,7 @@ const CMSAppearance = lazy(() => import('@/components/cms/Appearance'))
 const CMSNotebooks = lazy(() => import('@/components/cms/Notebooks'))
 const CMSBlog = lazy(() => import('@/components/cms/Blog'))
 const CMSSiteContent = lazy(() => import('@/components/cms/SiteContent'))
+const CMSPeople = lazy(() => import('@/components/cms/People'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -50,7 +53,9 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/trace" element={<TraceData />} />
+            <Route path="/projects/vote" element={<KumbiVote />} />
             <Route path="/blog" element={<Blog />} />
+            <Route path="/blog/:slug" element={<BlogPostPage />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Home />} />
             <Route path="/volunteer" element={<Volunteer />} />
@@ -75,6 +80,7 @@ export default function App() {
             <Route path="notebooks" element={<CMSNotebooks />} />
               <Route path="blog" element={<CMSBlog />} />
               <Route path="site-content" element={<CMSSiteContent />} />
+              <Route path="people" element={<CMSPeople />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

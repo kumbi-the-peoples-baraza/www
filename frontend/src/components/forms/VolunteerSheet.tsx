@@ -15,6 +15,7 @@ const schema = z.object({
   email: z.string().email('Invalid email'),
   phone: z.string().min(7, 'Invalid number'),
   skills: z.string().min(10, 'Please describe what you can do'),
+  _hp: z.string().max(0, 'Bot detected'), // honeypot
 })
 type FormData = z.infer<typeof schema>
 
@@ -44,6 +45,9 @@ export default function VolunteerSheet() {
         </div>
       ) : (
         <form onSubmit={handleSubmit(d => mutation.mutate(d))} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', width: W, margin: '0 auto' }}>
+          {/* Honeypot */}
+          <input {...register('_hp')} type="text" tabIndex={-1} autoComplete="off"
+            style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
           {/* One field per row — no grid */}
           <Field label="First Name" error={errors.firstName?.message}>
             <input {...register('firstName')} className="input-field" placeholder="Jane" />

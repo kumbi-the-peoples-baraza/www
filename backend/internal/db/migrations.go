@@ -55,12 +55,13 @@ CREATE TABLE IF NOT EXISTS content_blocks (
 );
 
 CREATE TABLE IF NOT EXISTS media_files (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name        TEXT NOT NULL,
-    url         TEXT NOT NULL,
-    mime_type   TEXT NOT NULL,
-    size        BIGINT NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name              TEXT NOT NULL,
+    url               TEXT NOT NULL,
+    mime_type         TEXT NOT NULL,
+    size              BIGINT NOT NULL DEFAULT 0,
+    gallery_published BOOLEAN NOT NULL DEFAULT false,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS form_submissions (
@@ -164,18 +165,36 @@ INSERT INTO site_config (id, data) VALUES ('default', $site_config_seed${
 }$site_config_seed$) ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS blog_posts (
-    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    slug         TEXT UNIQUE NOT NULL,
-    title        TEXT NOT NULL,
-    excerpt      TEXT NOT NULL DEFAULT '',
-    body         TEXT NOT NULL DEFAULT '',
-    cover_image  TEXT,
-    status       TEXT NOT NULL DEFAULT 'draft',
-    author_id    UUID REFERENCES users(id) ON DELETE SET NULL,
-    published_at TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    slug            TEXT UNIQUE NOT NULL,
+    title           TEXT NOT NULL,
+    excerpt         TEXT NOT NULL DEFAULT '',
+    body            TEXT NOT NULL DEFAULT '',
+    cover_image     TEXT,
+    cover_caption   TEXT,
+    status          TEXT NOT NULL DEFAULT 'draft',
+    author_id       UUID REFERENCES users(id) ON DELETE SET NULL,
+    published_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- People / team members
+CREATE TABLE IF NOT EXISTS people (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name        TEXT NOT NULL,
+    position    TEXT NOT NULL DEFAULT '',
+    bio         TEXT NOT NULL DEFAULT '',
+    portrait    TEXT,
+    published   BOOLEAN NOT NULL DEFAULT false,
+    "order"     INT NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ALTER TABLE additions (safe to re-run via IF NOT EXISTS / DO NOTHING)
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS gallery_published BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE blog_posts   ADD COLUMN IF NOT EXISTS cover_caption TEXT;
 
 -- Seed default appearance
 INSERT INTO appearance (id) VALUES (uuid_generate_v4()) ON CONFLICT DO NOTHING;

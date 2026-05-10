@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { mediaApi, configApi } from '@/api/client'
+import { mediaApi, galleryApi, configApi } from '@/api/client'
 import { useRef, useState } from 'react'
 import { Upload, Trash2, Image, FileText, Film, Music, Copy, Check, Settings } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -182,7 +182,7 @@ export default function Media() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4">
-            {files.map((f: { id: string; url: string; name: string }) => {
+            {files.map((f: { id: string; url: string; name: string; galleryPublished: boolean }) => {
               const Icon = iconFor(f.url)
               const isImg = Icon === Image
               return (
@@ -200,8 +200,15 @@ export default function Media() {
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground truncate px-1">{f.name}</p>
-                  <div className="px-1 pb-1">
+                  <div className="px-1 pb-1 flex items-center justify-between gap-1">
                     <CopyButton url={f.url} />
+                    <button
+                      onClick={() => galleryApi.setPublished(f.id, !f.galleryPublished).then(() => qc.invalidateQueries({ queryKey: ['media'] }))}
+                      title={f.galleryPublished ? 'Remove from gallery' : 'Add to gallery'}
+                      className={`text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${f.galleryPublished ? 'bg-green-500/15 text-green-600' : 'text-muted-foreground hover:text-primary'}`}
+                    >
+                      {f.galleryPublished ? '★' : '☆'}
+                    </button>
                   </div>
                 </div>
               )

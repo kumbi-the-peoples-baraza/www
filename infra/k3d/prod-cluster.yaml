@@ -1,0 +1,30 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: kumbi # Matches your PROD_CLUSTER name
+
+servers: 1
+agents: 0
+
+image: rancher/k3s:v1.33.6-k3s1
+
+ports:
+  - port: 80:80
+    nodeFilters: [loadbalancer]
+  - port: 443:443
+    nodeFilters: [loadbalancer]
+
+options:
+  k3s:
+    extraArgs:
+      # Disable Traefik to use NGINX Ingress + Cert-Manager
+      - arg: --disable=traefik
+        nodeFilters: [server:*]
+      # Critical for rootless VPS environments
+      - arg: --kube-proxy-arg=conntrack-max-per-core=0
+        nodeFilters: [server:*]
+      - arg: --kubelet-arg=feature-gates=KubeletInUserNamespace=true
+        nodeFilters: [server:*]
+  k3d:
+    wait: true
+    timeout: "120s"

@@ -26,16 +26,13 @@ func (h *MediaHandler) Upload(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no file"})
 		return
 	}
-
 	ext := filepath.Ext(file.Filename)
 	name := uuid.New().String() + ext
 	dst := filepath.Join(h.cfg.StoragePath, name)
-
 	if err := c.SaveUploadedFile(file, dst); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "save failed"})
 		return
 	}
-
 	url := fmt.Sprintf("/storage/%s", name)
 	var id string
 	err = h.db.QueryRow(c,
@@ -50,35 +47,26 @@ func (h *MediaHandler) Upload(c *gin.Context) {
 }
 
 func (h *MediaHandler) List(c *gin.Context) {
-	rows, err := h.db.Query(
-		c,
-		`SELECT id, name, url, mime_type, size, created_at FROM media_files ORDER BY created_at DESC`,
-	)
+	galleryOnly := c.Query("gallery") == "true"
+	q := `SELECT id, name, url, mime_type, size, gallery_published, created_at FROM media_files ORDER BY created_at DESC`
+	if galleryOnly {
+		q = `SELECT id, name, url, mime_type, size, gallery_published, created_at FROM media_files WHERE gallery_published=true ORDER BY created_at DESC`
+	}
+	rows, err := h.db.Query(c, q)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	defer rows.Close()
-
 	var files []gin.H
 	for rows.Next() {
 		var id, name, url, mimeType string
 		var size int64
+		var galleryPublished bool
 		var createdAt interface{}
-		if err := rows.Scan(&id, &name, &url, &mimeType, &size, &createdAt); err != nil {
-			continue
+		if rows.Scan(&id, &name, &url, &mimeType, &size, &galleryPublished, &createdAt) == nil {
+			files = append(files, gin.H{"id": id, "name": name, "url": url, "mimeType": mimeType, "size": size, "galleryPublished": galleryPublished, "createdAt": createdAt})
 		}
-		files = append(
-			files,
-			gin.H{
-				"id":        id,
-				"name":      name,
-				"url":       url,
-				"mimeType":  mimeType,
-				"size":      size,
-				"createdAt": createdAt,
-			},
-		)
 	}
 	if files == nil {
 		files = []gin.H{}
@@ -86,12 +74,19 @@ func (h *MediaHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, files)
 }
 
-func (h *MediaHandler) Delete(c *gin.Context) {
+func (h *MediaHandler) SetGallery(c *gin.Context) {
 	id := c.Param("id")
-	_, err := h.db.Exec(c, `DELETE FROM media_files WHERE id=$1`, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var req struct{ Published bool `json:"published"` }
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	h.db.Exec(c, `UPDATE media_files SET gallery_published=$1 WHERE id=$2`, req.Published, id)
+	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+}
+
+func (h *MediaHandler) Delete(c *gin.Context) {
+	id := c.Param("id")
+	h.db.Exec(c, `DELETE FROM media_files WHERE id=$1`, id)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }

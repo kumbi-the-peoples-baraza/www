@@ -10,6 +10,7 @@ const schema = z.object({
   email: z.string().email('Invalid email'),
   subject: z.string().min(1, 'Required'),
   message: z.string().min(10, 'Message too short'),
+  _hp: z.string().max(0, 'Bot detected'), // honeypot — must stay empty
 })
 type FormData = z.infer<typeof schema>
 
@@ -29,6 +30,9 @@ export default function ContactOverlay({ open, onClose }: Props) {
   return (
     <OverlayPanel open={open} onClose={onClose} title="Contact Us" subtitle="We'd love to hear from you">
       <form onSubmit={handleSubmit(d => mutation.mutate(d))} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', width: W, margin: '0 auto' }}>
+        {/* Honeypot — hidden from humans, bots fill it, Zod rejects if non-empty */}
+        <input {...register('_hp')} type="text" tabIndex={-1} autoComplete="off"
+          style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
         <Field label="Full Name" error={errors.name?.message}>
           <input {...register('name')} className="input-field" placeholder="Your full name" />
         </Field>

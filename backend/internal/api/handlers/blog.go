@@ -12,35 +12,83 @@ type BlogHandler struct{ db *pgxpool.Pool }
 
 func NewBlogHandler(db *pgxpool.Pool) *BlogHandler { return &BlogHandler{db: db} }
 
+func scanPost(rows interface {
+	Scan(...any) error
+}) (gin.H, error) {
+	var id, slug, title, excerpt, body, status string
+	var coverImage, coverCaption, authorID *string
+	var publishedAt *time.Time
+	var createdAt, updatedAt time.Time
+	err := rows.Scan(&id, &slug, &title, &excerpt, &body, &coverImage, &coverCaption, &status, &authorID, &publishedAt, &createdAt, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return gin.H{
+		"id": id, "slug": slug, "title": title, "excerpt": excerpt, "body": body,
+		"coverImage": coverImage, "coverCaption": coverCaption, "status": status,
+		"authorId": authorID, "publishedAt": publishedAt, "createdAt": createdAt, "updatedAt": updatedAt,
+	}, nil
+}
+
+const selectCols = `id, slug, title, excerpt, body, cover_image, cover_caption, status, author_id, published_at, created_at, updated_at`
+
 func (h *BlogHandler) List(c *gin.Context) {
-	// Public: only published; CMS: all
 	filter := "WHERE status='published'"
 	if c.GetBool("authenticated") {
 		filter = ""
 	}
+	// Pagination
+	limit := 30
+	offset := 0
 	rows, err := h.db.Query(c,
-		`SELECT id, slug, title, excerpt, body, cover_image, status, author_id, published_at, created_at, updated_at
-		 FROM blog_posts `+filter+` ORDER BY created_at DESC`)
+		`SELECT `+selectCols+` FROM blog_posts `+filter+` ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	defer rows.Close()
+	var posts []gin.H
+	for rows.Next() {
+		if p, err := scanPost(rows); err == nil {
+			posts = append(posts, p)
+		}
+	}
+	if posts == nil {
+		posts = []gin.H{}
+	}
+	c.JSON(http.StatusOK, posts)
+}
 
+// Popular returns posts ordered by page_views count
+func (h *BlogHandler) Popular(c *gin.Context) {
+	rows, err := h.db.Query(c, `
+		SELECT b.`+selectCols+`, COUNT(pv.id) as view_count
+		FROM blog_posts b
+		LEFT JOIN page_views pv ON pv.path = '/blog/' || b.slug
+		WHERE b.status='published'
+		GROUP BY b.id
+		ORDER BY view_count DESC
+		LIMIT 20`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
 	var posts []gin.H
 	for rows.Next() {
 		var id, slug, title, excerpt, body, status string
-		var coverImage, authorID *string
+		var coverImage, coverCaption, authorID *string
 		var publishedAt *time.Time
 		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&id, &slug, &title, &excerpt, &body, &coverImage, &status, &authorID, &publishedAt, &createdAt, &updatedAt); err != nil {
-			continue
+		var viewCount int
+		if rows.Scan(&id, &slug, &title, &excerpt, &body, &coverImage, &coverCaption, &status, &authorID, &publishedAt, &createdAt, &updatedAt, &viewCount) == nil {
+			posts = append(posts, gin.H{
+				"id": id, "slug": slug, "title": title, "excerpt": excerpt, "body": body,
+				"coverImage": coverImage, "coverCaption": coverCaption, "status": status,
+				"authorId": authorID, "publishedAt": publishedAt, "createdAt": createdAt, "updatedAt": updatedAt,
+				"viewCount": viewCount,
+			})
 		}
-		posts = append(posts, gin.H{
-			"id": id, "slug": slug, "title": title, "excerpt": excerpt, "body": body,
-			"coverImage": coverImage, "status": status, "authorId": authorID,
-			"publishedAt": publishedAt, "createdAt": createdAt, "updatedAt": updatedAt,
-		})
 	}
 	if posts == nil {
 		posts = []gin.H{}
@@ -50,32 +98,24 @@ func (h *BlogHandler) List(c *gin.Context) {
 
 func (h *BlogHandler) Get(c *gin.Context) {
 	slug := c.Param("slug")
-	var id, title, excerpt, body, status string
-	var coverImage, authorID *string
-	var publishedAt *time.Time
-	var createdAt, updatedAt time.Time
-	err := h.db.QueryRow(c,
-		`SELECT id, title, excerpt, body, cover_image, status, author_id, published_at, created_at, updated_at FROM blog_posts WHERE slug=$1`, slug,
-	).Scan(&id, &title, &excerpt, &body, &coverImage, &status, &authorID, &publishedAt, &createdAt, &updatedAt)
+	row := h.db.QueryRow(c, `SELECT `+selectCols+` FROM blog_posts WHERE slug=$1`, slug)
+	p, err := scanPost(row)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"id": id, "slug": slug, "title": title, "excerpt": excerpt, "body": body,
-		"coverImage": coverImage, "status": status, "authorId": authorID,
-		"publishedAt": publishedAt, "createdAt": createdAt, "updatedAt": updatedAt,
-	})
+	c.JSON(http.StatusOK, p)
 }
 
 func (h *BlogHandler) Create(c *gin.Context) {
 	var req struct {
-		Slug       string `json:"slug" binding:"required"`
-		Title      string `json:"title" binding:"required"`
-		Excerpt    string `json:"excerpt"`
-		Body       string `json:"body"`
-		CoverImage string `json:"coverImage"`
-		Status     string `json:"status"`
+		Slug         string `json:"slug" binding:"required"`
+		Title        string `json:"title" binding:"required"`
+		Excerpt      string `json:"excerpt"`
+		Body         string `json:"body"`
+		CoverImage   string `json:"coverImage"`
+		CoverCaption string `json:"coverCaption"`
+		Status       string `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -85,9 +125,12 @@ func (h *BlogHandler) Create(c *gin.Context) {
 		req.Status = "draft"
 	}
 	authorID, _ := c.Get("userID")
-	var coverImage *string
+	var coverImage, coverCaption *string
 	if req.CoverImage != "" {
 		coverImage = &req.CoverImage
+	}
+	if req.CoverCaption != "" {
+		coverCaption = &req.CoverCaption
 	}
 	var publishedAt *time.Time
 	if req.Status == "published" {
@@ -96,8 +139,8 @@ func (h *BlogHandler) Create(c *gin.Context) {
 	}
 	var id string
 	err := h.db.QueryRow(c,
-		`INSERT INTO blog_posts (slug, title, excerpt, body, cover_image, status, author_id, published_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-		req.Slug, req.Title, req.Excerpt, req.Body, coverImage, req.Status, authorID, publishedAt,
+		`INSERT INTO blog_posts (slug, title, excerpt, body, cover_image, cover_caption, status, author_id, published_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+		req.Slug, req.Title, req.Excerpt, req.Body, coverImage, coverCaption, req.Status, authorID, publishedAt,
 	).Scan(&id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -109,18 +152,18 @@ func (h *BlogHandler) Create(c *gin.Context) {
 func (h *BlogHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req struct {
-		Title      *string `json:"title"`
-		Slug       *string `json:"slug"`
-		Excerpt    *string `json:"excerpt"`
-		Body       *string `json:"body"`
-		CoverImage *string `json:"coverImage"`
-		Status     *string `json:"status"`
+		Title        *string `json:"title"`
+		Slug         *string `json:"slug"`
+		Excerpt      *string `json:"excerpt"`
+		Body         *string `json:"body"`
+		CoverImage   *string `json:"coverImage"`
+		CoverCaption *string `json:"coverCaption"`
+		Status       *string `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// Set published_at when first publishing
 	var publishedAt *time.Time
 	if req.Status != nil && *req.Status == "published" {
 		now := time.Now()
@@ -130,11 +173,12 @@ func (h *BlogHandler) Update(c *gin.Context) {
 		`UPDATE blog_posts SET
 			title=COALESCE($1,title), slug=COALESCE($2,slug), excerpt=COALESCE($3,excerpt),
 			body=COALESCE($4,body), cover_image=COALESCE($5,cover_image),
-			status=COALESCE($6,status),
-			published_at=CASE WHEN $7::timestamptz IS NOT NULL THEN $7 ELSE published_at END,
+			cover_caption=COALESCE($6,cover_caption),
+			status=COALESCE($7,status),
+			published_at=CASE WHEN $8::timestamptz IS NOT NULL THEN $8 ELSE published_at END,
 			updated_at=NOW()
-		 WHERE id=$8`,
-		req.Title, req.Slug, req.Excerpt, req.Body, req.CoverImage, req.Status, publishedAt, id,
+		 WHERE id=$9`,
+		req.Title, req.Slug, req.Excerpt, req.Body, req.CoverImage, req.CoverCaption, req.Status, publishedAt, id,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -145,10 +189,6 @@ func (h *BlogHandler) Update(c *gin.Context) {
 
 func (h *BlogHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-	_, err := h.db.Exec(c, `DELETE FROM blog_posts WHERE id=$1`, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	h.db.Exec(c, `DELETE FROM blog_posts WHERE id=$1`, id)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }

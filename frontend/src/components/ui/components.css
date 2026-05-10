@@ -14,9 +14,15 @@
   /* ── Card ── */
   .card { @apply glass-card p-8; }
 
-  /* ── Section — consistent padding, never edge-to-edge ── */
+  /* ── Section — always padded ── */
   .section {
-    @apply py-16 px-6 sm:px-10 lg:px-16 max-w-7xl mx-auto;
+    @apply py-16 max-w-7xl mx-auto;
+  }
+
+  /* ── Card — always has breathing room ── */
+  .glass-card {
+    @apply glass rounded-2xl shadow-md;
+    margin-bottom: 0; /* cards in grids use gap, not margin */
   }
 
   /* ── Overlay panel responsive width (fallback inside @layer) ── */

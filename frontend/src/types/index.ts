@@ -5,11 +5,23 @@ export interface BlogPost {
   excerpt: string
   body: string
   coverImage?: string
+  coverCaption?: string
   status: 'published' | 'draft' | 'archived'
   authorId?: string
   publishedAt?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface Person {
+  id: string
+  name: string
+  position: string
+  bio: string
+  portrait?: string
+  published: boolean
+  order: number
+  createdAt: string
 }
 
 export interface Page {

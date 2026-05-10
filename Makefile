@@ -16,6 +16,7 @@ FRONTEND_IMG := kumbi/frontend
 # k3d cluster names
 DEV_CLUSTER  := kumbi-dev
 TEST_CLUSTER := kumbi-test
+PROD_CLUSTER := kumbi 
 
 # kubectl always talks to the right cluster via --context
 DEV_CTX  := k3d-$(DEV_CLUSTER)
@@ -24,6 +25,10 @@ TEST_CTX := k3d-$(TEST_CLUSTER)
 KUBECTL      := kubectl
 KUBECTL_DEV  := kubectl --context $(DEV_CTX)
 KUBECTL_TEST := kubectl --context $(TEST_CTX)
+
+# PROD VAR
+PROD_HOST=kumbi
+REMOTE_DEST=~/kumbike.org
 
 # Load .env if it exists
 -include $(ENV_FILE)
@@ -273,6 +278,37 @@ _prod-secrets-check:
 	@grep -q "CHANGE_ME" infra/k8s/overlays/prod/secrets.yaml && { \
 	  echo -e "\033[1;31m[error]\033[0m prod secrets.yaml still has CHANGE_ME values"; exit 1; } || true
 
+# ── Staging / Prod (registry-based) ───────────────────────────────────────────
+
+# Sync local source to the VPS using the 'ndiku' SSH alias
+.PHONY: prod-sync
+prod-sync:
+	$(call log,Syncing code to $(PROD_HOST)...)
+	rsync -avz --exclude='.git' --exclude='node_modules' --exclude='backend/bin' ./ $(PROD_HOST):$(REMOTE_DEST)/
+
+# Run this once on the VPS to allow k3d/Docker to bind to 80/443 if using rootless
+.PHONY: prod-prep-ports
+k8s-prod-prep-ports:
+	ssh $(PROD_HOST) "sudo sysctl net.ipv4.ip_unprivileged_port_start=80"
+
+.PHONY: k8s-prod-cluster-create
+k8s-prod-cluster-create:
+	$(call log,Creating prod k3d cluster on $(PROD_HOST)...)
+	ssh $(PROD_HOST) "k3d cluster create --config $(REMOTE_DEST)/infra/k3d/prod-cluster.yaml || true" 
+
+.PHONY: prod-check-ssl
+prod-check-ssl:
+	$(call log,Verifying SSL for kumbike.org...)
+	@curl -vI https://kumbike.org 2>&1 | grep "SSL certificate" || echo "SSL not ready yet - wait a few mins for cert-manager"
+
+.PHONY: k8s-prod-install-ingress
+k8s-prod-install-ingress:
+	$(call log,Installing NGINX Ingress Controller...)
+	ssh $(PROD_HOST) "kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml"
+	$(call log,Waiting for Ingress Controller...)
+	ssh $(PROD_HOST) "kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s"
+
+#
 .PHONY: k8s-prod-build
 k8s-prod-build:
 	docker build -t $(REGISTRY)/$(BACKEND_IMG):$(TAG) ./backend
@@ -299,8 +335,44 @@ k8s-prod-seed:
 	$(KUBECTL) wait --for=condition=complete job/seed-admin -n kumbi --timeout=60s
 	$(KUBECTL) logs -n kumbi -l job-name=seed-admin
 
+.PHONY: k8s-prod-install-cert-manager
+k8s-prod-install-cert-manager:
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.yaml
+	@echo "Waiting for cert-manager..."
+	kubectl wait --for=condition=Available deployment --all -n cert-manager --timeout=120s
+
+.PHONY: k8s-prod-setup-ssl
+k8s-prod-setup-ssl:
+	kubectl apply -f cert-issuer.yaml # Your ClusterIssuer manifest
+
+.PHONY: k8s-prod-check-live
+k8s-prod-check-live:
+	@echo "Checking SSL for kumbike.org...."
+curl -vI https://kumbike.org 2>&1 | grep "SSl Certificate"
+	@echo "Checking Kubernetes Pods...."
+	ssh $(REMOTE_HOST) "kubectl get pods -n kumbi"
+
 .PHONY: k8s-prod-deploy
-k8s-prod-deploy: k8s-prod-build k8s-prod-apply k8s-prod-rollout k8s-prod-seed k8s-status
+k8s-prod-deploy: prod-sync
+	$(call log,Starting remote production deployment...)
+	# Create prod cluster
+	$(MAKE) k8s-prod-cluster-create
+	$(MAKE) k8s-prod-install-ingress
+	# Build and push images to registry 
+	$(MAKE) k8s-prod-build
+	# Apply manifests 
+	ssh $(PROD_HOST) "cd $(REMOTE_DEST) && \
+						$(MAKE) k8s-prod-apply && \
+						$(MAKE) k8s-prod-install-cert-manager && \
+						$(MAKE) k8s-prod-setup-ssl && \
+						$(MAKE) k8s-prod-rollout"
+	$(MAKE) k8s-prod-seed
+	$(call log,Production Deployment Complete)
+	$(MAKE) prod-check-ssl 
+	$(call log,SSL Check Completed)
+	$(MAKE) k8s-status 
+
+
 
 .PHONY: k8s-teardown
 k8s-teardown:

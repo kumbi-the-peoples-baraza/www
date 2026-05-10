@@ -75,6 +75,7 @@ export const notebooksApi = {
     fd.append('notebook', file)
     return api.post('/notebooks', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
   },
+  importFromGitHub: (url: string) => api.post('/notebooks/import-github', { url }),
 }
 
 // Users
@@ -88,11 +89,27 @@ export const usersApi = {
 // Blog
 export const blogApi = {
   list: () => api.get('/blog'),
-  listAll: () => api.get('/blog/all'),   // CMS — includes drafts
+  popular: () => api.get('/blog/popular'),
+  listAll: () => api.get('/blog/all'),
   get: (slug: string) => api.get(`/blog/${slug}`),
   create: (data: unknown) => api.post('/blog', data),
   update: (id: string, data: unknown) => api.put(`/blog/${id}`, data),
   delete: (id: string) => api.delete(`/blog/${id}`),
+}
+
+// People
+export const peopleApi = {
+  list: () => api.get('/people'),
+  listAll: () => api.get('/people/all'),
+  create: (data: unknown) => api.post('/people', data),
+  update: (id: string, data: unknown) => api.put(`/people/${id}`, data),
+  delete: (id: string) => api.delete(`/people/${id}`),
+}
+
+// Media gallery
+export const galleryApi = {
+  list: () => api.get('/media/gallery'),
+  setPublished: (id: string, published: boolean) => api.put(`/media/${id}/gallery`, { published }),
 }
 
 // Site config (editable text, images, nav, footer)

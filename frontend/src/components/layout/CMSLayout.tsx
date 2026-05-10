@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Image, FormInput, Users,
-  BarChart3, Palette, BookOpen, LogOut, ChevronLeft, Menu, Newspaper, Globe
+  BarChart3, Palette, BookOpen, LogOut, ChevronLeft, Menu, Newspaper, Globe, UserCircle
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/cms', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/cms/site-content', icon: Globe, label: 'Site Content' },
   { to: '/cms/blog', icon: Newspaper, label: 'Blog' },
+  { to: '/cms/people', icon: UserCircle, label: 'Our People' },
   { to: '/cms/media', icon: Image, label: 'Media' },
   { to: '/cms/forms', icon: FormInput, label: 'Forms' },
   { to: '/cms/notebooks', icon: BookOpen, label: 'Notebooks' },

@@ -37,7 +37,7 @@ const DEFAULTS: SiteConfig = {
       { id: 'trace', title: 'KumbiTrace', tag: 'Missing Persons · Data', link: '/projects/trace',
         description: 'Born from the 2024 Nairobi protests, KumbiTrace is a crowd-sourced platform for tracking enforced disappearances.',
         image: 'https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=900&q=80&auto=format&fit=crop' },
-      { id: 'vote', title: 'KumbiVote', tag: 'Blockchain · Elections', link: '/projects',
+      { id: 'vote', title: 'KumbiVote', tag: 'Blockchain · Elections', link: '/projects/vote',
         description: 'A bulletproof blockchain-based distributed elections management platform built for Africa.',
         image: 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=900&q=80&auto=format&fit=crop' },
       { id: 'social', title: 'Social Work', tag: 'Community · Volunteers', link: '/blog',
