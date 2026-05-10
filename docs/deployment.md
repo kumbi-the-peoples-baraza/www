@@ -4,8 +4,8 @@
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| `docker` (rootless) | 24+ | Build images |
-| `k3d` | 5.8+ | Local Kubernetes via Docker (dev + test) |
+| `docker` | 24+ | Build images |
+| `k3d` | 5.8+ | Local Kubernetes via Docker |
 | `kubectl` | 1.29+ | Cluster management |
 | `go` | 1.23+ | Backend dev/build |
 | `bun` | 1.1+ | Frontend dev/build |
@@ -15,255 +15,202 @@ Install k3d:
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 ```
 
-> **Rootless Docker note:** `k3d image import` requires `/var/run/docker.sock` and does not work with rootless Docker. The Makefile uses `docker save <img> | docker exec -i k3d-<cluster>-server-0 ctr images import -` instead. This is handled automatically by `make dev` and `make k8s-test-up`.
+> **Rootless Docker note:** `k3d image import` requires `/var/run/docker.sock` and does not work with rootless Docker. The Makefile uses `docker save <img> | docker exec -i k3d-<cluster>-server-0 ctr images import -` instead. This is handled automatically by all build/deploy commands.
 
 ---
 
-## Confirmed Working Setup (dev)
+## How it works
 
-Verified 2026-05-09 on rootless Docker + k3d v5.8.3:
+All commands take an `ENV` argument:
 
-| Item | Value |
-|------|-------|
-| k3s image | `rancher/k3s:v1.33.6-k3s1` |
-| Cluster name | `kumbi-dev` |
-| kubectl context | `k3d-kumbi-dev` |
-| Namespace | `kumbi` |
-| Ingress | Traefik (k3d built-in), `ingressClassName: traefik` |
-| Port mapping | `0.0.0.0:80→80`, `0.0.0.0:443→443` |
-| Frontend | `http://localhost` |
-| API | `http://localhost/api/v1` |
-| Admin login | `root@kumbi.local` (seeded by `seed-admin` job) |
+```bash
+make <command> ENV=dev|test|prod
+```
+
+Default is `ENV=dev`. The same Makefile runs everywhere — on your local machine for dev/test, and directly on the VPS for prod.
 
 ---
 
 ## Environments
 
-| Env | Cluster | Namespace | Ingress port | Image source |
-|-----|---------|-----------|-------------|--------------|
-| dev | `kumbi-dev` (k3d) | `kumbi` | `localhost:80` | local Docker build |
-| test | `kumbi-test` (k3d) | `kumbi-test` | `localhost:8080` | local Docker build |
-| staging | external k8s | `kumbi-staging` | configured by cluster | registry push |
-| prod | external k8s | `kumbi` | configured by cluster | registry push |
-
-All environments share `infra/k8s/base/`. The `kumbi` namespace is defined in `base/namespace.yaml` and applied automatically by every overlay.
+| ENV | Cluster | Namespace | URL |
+|-----|---------|-----------|-----|
+| `dev` | `kumbi-dev` | `kumbi` | `http://localhost` |
+| `test` | `kumbi-test` | `kumbi-test` | `http://localhost:8080` |
+| `prod` | `kumbi` | `kumbi` | `https://kumbike.org` |
 
 ---
 
-## Initial Setup
+## Core Commands
+
+### `make deploy ENV=<env>`
+Full clean-slate deploy. Wipes the existing cluster and all Docker state, then:
+1. Creates a fresh k3d cluster
+2. (prod only) Installs NGINX Ingress + cert-manager + ClusterIssuer
+3. Builds Docker images and loads them into the cluster
+4. Applies the Kustomize overlay
+5. Waits for rollout
+6. Seeds the admin user
 
 ```bash
-git clone <repo> && cd kumbi
-cp .env.example .env                                          # native tooling only
-cp infra/k8s/overlays/dev/secrets.yaml.example \
-   infra/k8s/overlays/dev/secrets.yaml                       # edit values
-make setup                                                    # install deps
+make deploy           # dev (default)
+make deploy ENV=test
+make deploy ENV=prod  # run this on the VPS
+```
+
+### `make refresh ENV=<env>`
+Rebuild images and redeploy without recreating the cluster. Fastest iteration loop.
+
+```bash
+make refresh
+make refresh ENV=prod
+```
+
+### `make migrate ENV=<env>`
+Restart the backend pod to re-run DB migrations. Migrations run automatically on every backend startup — this forces a restart to apply schema changes immediately.
+
+```bash
+make migrate
+make migrate ENV=prod
+```
+
+### `make build ENV=<env>`
+Build Docker images and load them into the cluster (without redeploying).
+
+```bash
+make build
+make build ENV=prod
 ```
 
 ---
 
-## Dev Environment
+## Dev Workflow
 
 ```bash
-make dev                  # create k3d cluster if needed, build, load, deploy
-make k8s-dev-up           # same as above (explicit)
-make k8s-dev-down         # remove kumbi namespace
-make k8s-dev-seed         # re-run seed-admin job
-make k8s-status           # pods, services, ingress
-make k3d-create           # create cluster only
-make k3d-delete           # delete cluster
+make setup            # install deps (once)
+make deploy           # full deploy to dev cluster
+make refresh          # rebuild + redeploy after code changes
+make migrate          # re-run migrations
+make status           # show pods/svc/ingress
+make teardown         # ⚠ delete namespace (prompts)
+make cluster-delete   # delete the k3d cluster
 ```
 
 URLs: `http://localhost` (frontend + CMS) · `http://localhost/api` (backend)
 
-`make dev` is idempotent — re-running it rebuilds images, reloads them into k3d, and re-applies the overlay. The cluster is created automatically on first run.
-
 ---
 
-## Test Environment
-
-Runs on a separate k3d cluster so dev and test can coexist.
+## Test Workflow
 
 ```bash
-cp infra/k8s/overlays/test/secrets.yaml.example \
-   infra/k8s/overlays/test/secrets.yaml                      # edit values
-make k8s-test-up          # create cluster, build, load, deploy
-make k8s-test-down        # remove kumbi-test namespace
-make k3d-test-create      # create cluster only
-make k3d-test-delete      # delete cluster
+make deploy ENV=test
+make refresh ENV=test
+make status ENV=test
+make teardown ENV=test
 ```
 
 URL: `http://localhost:8080`
 
 ---
 
-## Staging Environment
+## Production Workflow
 
-Staging uses a registry-pushed image and an external Kubernetes cluster (your staging kubeconfig context must be active, or set `KUBECONFIG`).
+### From the VPS (recommended)
+
+SSH into the VPS and run commands directly:
 
 ```bash
-cp infra/k8s/overlays/staging/secrets.yaml.example \
-   infra/k8s/overlays/staging/secrets.yaml                   # fill in CHANGE_ME values
+ssh kumbi
+cd ~/kumbike.org
+make deploy ENV=prod    # full clean-slate deploy
+make refresh ENV=prod   # rebuild + redeploy
+make migrate ENV=prod   # re-run migrations
+make status ENV=prod    # show pods/svc/ingress
+```
 
-# Build and push
-REGISTRY=registry.example.com TAG=v1.2.0-rc1 \
-  VITE_API_BASE_URL=https://staging-api.example.com \
-  make k8s-staging-build
+### From your local machine
 
-# Apply overlay
-make k8s-staging-apply
+Use `make remote` to sync source and run a command on the VPS:
+
+```bash
+make remote CMD=deploy          # sync + make deploy ENV=prod on VPS
+make remote CMD=refresh         # sync + make refresh ENV=prod on VPS
+make remote CMD=migrate         # sync + make migrate ENV=prod on VPS
+make sync                       # sync source only (no command)
+```
+
+`make remote` always runs `make sync` first, so the VPS always has the latest source.
+
+---
+
+## Scaling (prod)
+
+Production runs 3 replicas of backend and 3 of frontend by default (set in `overlays/prod/kustomization.yaml`).
+
+Scale live without redeploying:
+
+```bash
+make scale-up   ENV=prod                              # backend=3, frontend=3
+make scale-down ENV=prod                              # backend=1, frontend=1
+make scale      ENV=prod BACKEND_REPLICAS=5 FRONTEND_REPLICAS=2
 ```
 
 ---
 
-## Production Environment
+## Secrets
 
-```bash
-cp infra/k8s/overlays/prod/secrets.yaml.example \
-   infra/k8s/overlays/prod/secrets.yaml                      # fill in CHANGE_ME values
+Secrets are never committed. Each environment has its own secrets file.
 
-# Full deploy (build → push → apply → rollout → seed)
-REGISTRY=registry.example.com TAG=v1.2.0 \
-  VITE_API_BASE_URL=https://api.example.com \
-  make k8s-prod-deploy
+| ENV | File |
+|-----|------|
+| dev | `infra/k8s/overlays/dev/secrets.yaml` |
+| test | `infra/k8s/overlays/test/secrets.yaml` |
+| prod | `infra/k8s/overlays/prod/secrets.yaml` |
 
-# Individual steps
-make k8s-prod-build       # docker build + push to registry
-make k8s-prod-apply       # kubectl apply -k overlays/prod
-make k8s-prod-rollout     # restart deployments, wait for rollout
-make k8s-prod-seed        # run seed-admin job
-make k8s-teardown         # ⚠ delete kumbi namespace (destructive)
-```
+Copy from the `.example` file and fill in values. Key constraints:
+- `DATABASE_URL` user must be `kumbi` (matches `POSTGRES_USER` in `base/postgres.yaml`)
+- `JWT_SECRET` must be at least 32 characters
+- `ALLOW_ORIGIN` must match the environment URL
+
+The prod `secrets.yaml` is excluded from `make sync` — manage it directly on the VPS.
 
 ---
 
-## Release Cycle
-
-```
-feature/* ──► main ──► tag vX.Y.Z ──► prod deploy
-                │
-                └──► CI runs on every push/PR:
-                       test-backend
-                       test-frontend
-                       build-images (main only)
-                       push-images  (tags only)
-                       deploy-staging (tags only, auto)
-                       deploy-prod    (tags only, manual approval)
-```
-
-### Branching strategy
-
-| Branch | Purpose |
-|--------|---------|
-| `main` | Always deployable. CI builds + pushes images on every merge. |
-| `feature/*` | Feature branches. PR → main. |
-| `hotfix/*` | Emergency fixes. PR → main, then tag immediately. |
-| `release/vX.Y.Z` | Optional release prep branch for larger releases. |
-
-### Tagging a release
+## User Management
 
 ```bash
-git tag -a v1.2.0 -m "Release v1.2.0"
-git push origin v1.2.0
+make seed                                                        # seed/reset default admin
+make create-user NAME="Jane Doe" EMAIL=jane@example.com PASS=secret ROLE=admin
 ```
 
-Pushing a `v*` tag triggers the CI release pipeline:
-1. Tests run
-2. Images built and pushed as `registry/kumbi/backend:v1.2.0` and `registry/kumbi/frontend:v1.2.0`
-3. Staging deployed automatically
-4. Production deploy requires manual approval in GitHub Actions
-
----
-
-## Make Reference
-
-### Setup & build
-
-| Command | Description |
-|---------|-------------|
-| `make setup` | Install frontend (bun) and backend (go mod) dependencies |
-| `make build` | Build frontend bundle + backend binary |
-| `make test` | Run backend Go tests + frontend build check |
-| `make lint` | `go vet` + `bun run lint` |
-
-### Dev (k3d)
-
-| Command | Description |
-|---------|-------------|
-| `make dev` | Full dev deploy (alias for `k8s-dev-up`) |
-| `make k3d-create` | Create `kumbi-dev` k3d cluster |
-| `make k3d-delete` | Delete `kumbi-dev` k3d cluster |
-| `make k8s-dev-up` | Build images, load into k3d, apply dev overlay |
-| `make k8s-dev-down` | Delete `kumbi` namespace from dev cluster |
-| `make k8s-dev-seed` | Re-run seed-admin job in dev |
-| `make k8s-status` | Show pods/svc/ingress in dev cluster |
-
-### Test (k3d)
-
-| Command | Description |
-|---------|-------------|
-| `make k3d-test-create` | Create `kumbi-test` k3d cluster |
-| `make k3d-test-delete` | Delete `kumbi-test` k3d cluster |
-| `make k8s-test-up` | Build images, load into k3d, apply test overlay |
-| `make k8s-test-down` | Delete `kumbi-test` namespace |
-
-### Staging
-
-| Command | Description |
-|---------|-------------|
-| `make k8s-staging-build` | Build + push staging images to registry |
-| `make k8s-staging-apply` | Apply staging overlay to current kubectl context |
-
-### Production
-
-| Command | Description |
-|---------|-------------|
-| `make k8s-prod-build` | Build + push prod images to registry |
-| `make k8s-prod-apply` | Apply prod overlay |
-| `make k8s-prod-rollout` | Restart deployments + wait |
-| `make k8s-prod-seed` | Run seed-admin job |
-| `make k8s-prod-deploy` | Full deploy: build + apply + rollout + seed |
-| `make k8s-teardown` | ⚠ Delete `kumbi` namespace (destructive, prompts) |
-
-### Docker Compose (local tooling helper)
-
-| Command | Description |
-|---------|-------------|
-| `make compose-up` | Start all services via Compose |
-| `make compose-down` | Stop and remove containers |
-| `make compose-logs` | Tail all service logs |
-
-### User management
-
-| Command | Description |
-|---------|-------------|
-| `make seed` | Seed/reset default admin (reads `SEED_ADMIN_*` from `.env`) |
-| `make create-user NAME=.. EMAIL=.. PASS=.. ROLE=..` | Create any user |
+Both commands read `DATABASE_URL` from `.env`. The `create-user` command is idempotent — re-running with the same email updates the existing user.
 
 Available roles: `admin`, `editor`, `viewer`
 
 ---
 
-## Secrets Management
+## Make Reference
 
-Secrets are never committed. Each environment has its own secrets file.
-
-| Environment | Location |
-|-------------|----------|
-| Native dev / Compose | `.env` (copy from `.env.example`) |
-| k3d dev | `infra/k8s/overlays/dev/secrets.yaml` |
-| k3d test | `infra/k8s/overlays/test/secrets.yaml` |
-| Staging | `infra/k8s/overlays/staging/secrets.yaml` |
-| Production | `infra/k8s/overlays/prod/secrets.yaml` |
-
-All `secrets.yaml` files are gitignored. Copy from the `.example` file and fill in values.
-
-**CI/CD secret injection** — never store real secrets in the repo. Instead:
-- GitHub Actions: store as repository secrets, write `secrets.yaml` at deploy time (see CI workflow)
-- AWS: use Secrets Manager + `aws secretsmanager get-secret-value` in the deploy step
-- HashiCorp Vault: use `vault kv get` in the deploy step
-
-Minimum required secrets: `DATABASE_URL`, `JWT_SECRET`, `POSTGRES_PASSWORD`.
+| Command | Description |
+|---------|-------------|
+| `make setup` | Install frontend (bun) and backend (go mod) dependencies |
+| `make test` | Run backend Go tests + frontend tests |
+| `make lint` | `go vet` + `bun run lint` |
+| `make build ENV=..` | Build + load Docker images |
+| `make deploy ENV=..` | Full clean-slate deploy |
+| `make refresh ENV=..` | Rebuild images + redeploy |
+| `make migrate ENV=..` | Restart backend to re-run migrations |
+| `make status ENV=..` | Show pods/svc/ingress |
+| `make cluster-create ENV=..` | Create k3d cluster |
+| `make cluster-delete ENV=..` | Delete k3d cluster |
+| `make teardown ENV=..` | ⚠ Delete namespace (prompts) |
+| `make sync` | Rsync source to VPS |
+| `make remote CMD=<cmd>` | Sync + run command on VPS |
+| `make scale-up ENV=..` | Scale to 3 replicas |
+| `make scale-down ENV=..` | Scale to 1 replica |
+| `make scale ENV=.. BACKEND_REPLICAS=N FRONTEND_REPLICAS=N` | Custom scale |
+| `make seed` | Seed/reset admin user |
+| `make create-user NAME=.. EMAIL=.. PASS=.. ROLE=..` | Create/update user |
 
 ---
 
@@ -272,29 +219,25 @@ Minimum required secrets: `DATABASE_URL`, `JWT_SECRET`, `POSTGRES_PASSWORD`.
 ```
 infra/
 ├── k3d/
-│   ├── dev-cluster.yaml       # k3d cluster config — dev (port 80)
-│   └── test-cluster.yaml      # k3d cluster config — test (port 8080)
+│   ├── dev-cluster.yaml    # port 80, Traefik
+│   ├── test-cluster.yaml   # port 8080, Traefik
+│   └── prod-cluster.yaml   # ports 80+443, Traefik disabled (NGINX)
 └── k8s/
-    ├── base/                  # Shared manifests (all environments)
-    │   ├── kustomization.yaml
-    │   ├── namespace.yaml
-    │   ├── postgres.yaml
-    │   ├── backend.yaml
-    │   ├── frontend.yaml
-    │   ├── ingress.yaml       # ingressClassName: traefik (k3d default)
-    │   └── seed-job.yaml
+    ├── base/               # shared manifests (all environments)
     └── overlays/
-        ├── dev/               # k3d dev — IfNotPresent, dev tags, ENV=development
-        ├── test/              # k3d test — IfNotPresent, test tags, ENV=test, ns=kumbi-test
-        ├── staging/           # registry images, ENV=staging, ns=kumbi-staging
-        └── prod/              # registry images, ENV=production, ns=kumbi
+        ├── dev/
+        ├── test/
+        └── prod/           # NGINX ingress, TLS, cert-manager, 3 replicas
 ```
 
 ---
 
-## Dockerfiles
+## CI/CD
 
-- **Backend**: multi-stage Go build → distroless final image, runs as UID `65534` (nobody)
-- **Frontend**: Bun builder → `nginx:1.27-alpine`, nginx proxies `/api/` and `/storage/` to backend
+```
+feature/* ──► main ──► tag vX.Y.Z ──► prod deploy
+                │
+                └──► CI: test → build → deploy-staging → deploy-prod (manual approval)
+```
 
-Both are OCI-compliant and work with rootless Docker and containerd.
+Pushing a `v*` tag triggers the release pipeline. Production deploy requires manual approval in GitHub Actions.

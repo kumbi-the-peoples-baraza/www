@@ -6,7 +6,7 @@ metadata:
   namespace: kumbi
 data:
   POSTGRES_DB: kumbi
-  POSTGRES_USER: kumbi
+  POSTGRES_USER: fundi
 ---
 # postgres-secret (POSTGRES_PASSWORD) is applied from the overlay secrets.yaml
 # Do NOT define it here — it would overwrite the value from secrets.yaml.
@@ -52,7 +52,7 @@ spec:
               mountPath: /var/lib/postgresql/data
           readinessProbe:
             exec:
-              command: [pg_isready, -U, kumbi]
+              command: [pg_isready, -U, fundi]
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:

@@ -12,7 +12,6 @@ const features = [
 
 export default function KumbiVote() {
   const cfg = useConfig()
-  const voteProject = cfg.projects.items.find(p => p.id === 'vote')
 
   return (
     <>
@@ -20,7 +19,7 @@ export default function KumbiVote() {
         title="KumbiVote"
         subtitle="A bulletproof, first-of-its-kind blockchain-based distributed elections management and polling platform — low latency, tamper-proof, and built for Africa."
         tag="Blockchain · Elections"
-        img={voteProject?.image || cfg.pages.projects.heroImage}
+        img={cfg.pages.vote.heroImage}
       />
       <div className="section">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-7 mb-16">

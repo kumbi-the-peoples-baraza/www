@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { configApi } from '@/api/client'
+import { DEFAULTS } from '@/hooks/useConfig'
 import { useState } from 'react'
 import { Save, ChevronDown, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -68,7 +69,21 @@ export default function SiteContent() {
   const cfg: SiteConfig | null = draft ?? raw ?? null
 
   // Initialise draft from fetched data on first load
-  if (raw && !draft) setDraft(raw as SiteConfig)
+  if (raw && !draft) setDraft({
+    nav:       { ...DEFAULTS.nav,       ...(raw.nav       || {}) },
+    hero:      { ...DEFAULTS.hero,      ...(raw.hero      || {}) },
+    projects:  { ...DEFAULTS.projects,  ...(raw.projects  || {}), items: raw.projects?.items || DEFAULTS.projects.items },
+    volunteer: { ...DEFAULTS.volunteer, ...(raw.volunteer || {}) },
+    footer:    { ...DEFAULTS.footer,    ...(raw.footer    || {}) },
+    pages: {
+      about:    { ...DEFAULTS.pages.about,    ...(raw.pages?.about    || {}) },
+      projects: { ...DEFAULTS.pages.projects, ...(raw.pages?.projects || {}) },
+      blog:     { ...DEFAULTS.pages.blog,     ...(raw.pages?.blog     || {}) },
+      volunteer:{ ...DEFAULTS.pages.volunteer,...(raw.pages?.volunteer|| {}) },
+      trace:    { ...DEFAULTS.pages.trace,    ...(raw.pages?.trace    || {}) },
+      vote:     { ...DEFAULTS.pages.vote,     ...(raw.pages?.vote     || {}) },
+    },
+  })
 
   const mutation = useMutation({
     mutationFn: (data: SiteConfig) => configApi.update(data),
@@ -185,6 +200,10 @@ export default function SiteContent() {
 
       <Section title="KumbiTrace Page">
         <ImagePicker label="Hero Image" value={cfg.pages.trace.heroImage} onChange={v => setPage('trace')({ heroImage: v })} />
+      </Section>
+
+      <Section title="KumbiVote Page">
+        <ImagePicker label="Hero Image" value={cfg.pages.vote.heroImage} onChange={v => setPage('vote')({ heroImage: v })} />
       </Section>
 
       <Section title="Volunteer Page">

@@ -17,10 +17,11 @@ export interface SiteConfig {
     blog:     { heroImage: string }
     volunteer:{ heroImage: string }
     trace:    { heroImage: string }
+    vote:     { heroImage: string }
   }
 }
 
-const DEFAULTS: SiteConfig = {
+export const DEFAULTS: SiteConfig = {
   nav: { brand: 'Kumbi', tagline: "The People's Baraza" },
   hero: {
     heading: 'Building a Better Community Together',
@@ -63,6 +64,7 @@ const DEFAULTS: SiteConfig = {
     blog:     { heroImage: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop' },
     volunteer:{ heroImage: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop' },
     trace:    { heroImage: 'https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop' },
+    vote:     { heroImage: 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=1400&q=80&auto=format&fit=crop' },
   },
 }
 
@@ -86,6 +88,7 @@ export function useConfig(): SiteConfig {
       blog:     { ...DEFAULTS.pages.blog,     ...(data.pages?.blog     || {}) },
       volunteer:{ ...DEFAULTS.pages.volunteer,...(data.pages?.volunteer|| {}) },
       trace:    { ...DEFAULTS.pages.trace,    ...(data.pages?.trace    || {}) },
+      vote:     { ...DEFAULTS.pages.vote,     ...(data.pages?.vote     || {}) },
     },
   }
 }

@@ -4,11 +4,8 @@ kind: Ingress
 metadata:
   name: kumbi
   namespace: kumbi
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"   # kept for nginx compat
-    traefik.ingress.kubernetes.io/router.entrypoints: web # traefik compat
 spec:
-  ingressClassName: traefik   # k3d default; override to "nginx" for prod if needed
+  ingressClassName: traefik   # dev/test only — prod overlay uses nginx
   rules:
     - http:
         paths:

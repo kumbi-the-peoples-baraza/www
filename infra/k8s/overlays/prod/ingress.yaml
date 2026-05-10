@@ -4,6 +4,7 @@ metadata:
   name: kumbi-ingress
   namespace: kumbi
   annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     # Triggers cert-manager to create a certificate
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     # Redirects all http (80) traffic to https (443)

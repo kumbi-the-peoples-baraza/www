@@ -11,15 +11,15 @@ A civic technology platform for community impact in Nairobi, Kenya. Includes Kum
 ## Quick Start
 
 ```bash
-# Prerequisites: docker (rootless), k3d, kubectl, go 1.23+, bun
+# Prerequisites: docker, k3d, kubectl, go 1.23+, bun
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 
 git clone <repo> && cd kumbi
 cp infra/k8s/overlays/dev/secrets.yaml.example infra/k8s/overlays/dev/secrets.yaml
 # Edit secrets.yaml — DATABASE_URL user must be "kumbi", ALLOW_ORIGIN must be "http://localhost"
 
-make setup   # install deps
-make dev     # creates k3d cluster, builds images, deploys to namespace "kumbi"
+make setup          # install deps
+make deploy         # creates k3d cluster, builds images, deploys (ENV=dev by default)
 ```
 
 - Frontend + CMS: `http://localhost`
@@ -28,12 +28,19 @@ make dev     # creates k3d cluster, builds images, deploys to namespace "kumbi"
 
 ## Environments
 
-| Env | Command | URL | Namespace |
-|-----|---------|-----|-----------|
-| dev | `make dev` | `http://localhost` | `kumbi` |
-| test | `make k8s-test-up` | `http://localhost:8080` | `kumbi-test` |
-| staging | `make k8s-staging-build && make k8s-staging-apply` | cluster-configured | `kumbi-staging` |
-| prod | `make k8s-prod-deploy` | cluster-configured | `kumbi` |
+All commands take `ENV=dev|test|prod`. Default is `dev`.
+
+| ENV | URL | Namespace |
+|-----|-----|-----------|
+| `dev` | `http://localhost` | `kumbi` |
+| `test` | `http://localhost:8080` | `kumbi-test` |
+| `prod` | `https://kumbike.org` | `kumbi` |
+
+```bash
+make deploy           # dev
+make deploy ENV=test
+make deploy ENV=prod  # run on the VPS directly
+```
 
 ## CMS
 
@@ -53,29 +60,30 @@ Log in at `http://localhost/cms` (or click the padlock icon in the navbar).
 ## Make Reference
 
 ```bash
-make setup              # install deps
-make dev                # full dev deploy (k3d + k8s)
-make build              # build binaries
-make test               # run tests
-make lint               # lint
+make setup                    # install deps
+make test                     # run tests
+make lint                     # lint
 
-make k3d-create         # create dev k3d cluster
-make k3d-delete         # delete dev k3d cluster
-make k8s-dev-up         # build + import images + deploy dev overlay
-make k8s-dev-down       # delete kumbi namespace
-make k8s-dev-seed       # re-run seed-admin job
-make k8s-status         # show pods/svc/ingress
+make deploy                   # full dev deploy
+make deploy ENV=test          # full test deploy
+make deploy ENV=prod          # full prod deploy (run on VPS)
+make refresh [ENV=..]         # rebuild images + redeploy
+make migrate [ENV=..]         # re-run DB migrations
 
-make k8s-test-up        # deploy test overlay (separate cluster, port 8080)
-make k8s-test-down      # delete kumbi-test namespace
+make cluster-create [ENV=..]  # create k3d cluster
+make cluster-delete [ENV=..]  # delete k3d cluster
+make status [ENV=..]          # show pods/svc/ingress
+make teardown [ENV=..]        # ⚠ delete namespace
 
-make k8s-staging-build  # build + push staging images
-make k8s-staging-apply  # apply staging overlay
+make sync                     # rsync source to VPS
+make remote CMD=deploy        # sync + run command on VPS
+make remote CMD=refresh
 
-make k8s-prod-deploy    # full prod deploy (build + apply + rollout + seed)
-make k8s-teardown       # ⚠ delete kumbi namespace
+make scale-up [ENV=..]        # scale backend+frontend to 3 replicas
+make scale-down [ENV=..]      # scale backend+frontend to 1 replica
+make scale [ENV=..] BACKEND_REPLICAS=N FRONTEND_REPLICAS=N
 
-make seed               # seed/reset admin user
+make seed                     # seed/reset admin user
 make create-user NAME=.. EMAIL=.. PASS=.. ROLE=..
 ```
 

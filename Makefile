@@ -1,38 +1,56 @@
 # Kumbi — The People's Baraza
-# Usage: make <target>
-# Run `make help` for a full list of targets.
+# Usage: make <command> [ENV=dev|test|prod]
+# Run `make help` for a full list of commands.
+#
+# On the VPS, run commands directly (no SSH):
+#   make deploy ENV=prod
+#   make refresh ENV=prod
+#   make migrate ENV=prod
 
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
-# ── Config ────────────────────────────────────────────────────────────────────
-REGISTRY   ?= registry.localhost:5000
-TAG        ?= latest
-ENV_FILE   ?= .env
+# ── Environment ───────────────────────────────────────────────────────────────
+ENV ?= dev
 
-BACKEND_IMG  := kumbi/backend
-FRONTEND_IMG := kumbi/frontend
+# Validate ENV
+ifeq ($(filter $(ENV),dev test prod),)
+  $(error ENV must be dev, test, or prod — got '$(ENV)')
+endif
 
-# k3d cluster names
-DEV_CLUSTER  := kumbi-dev
-TEST_CLUSTER := kumbi-test
-PROD_CLUSTER := kumbi 
+# ── Per-environment config ────────────────────────────────────────────────────
+ifeq ($(ENV),prod)
+  CLUSTER   := kumbi
+  NAMESPACE := kumbi
+  IMG_TAG   := prod
+  OVERLAY   := infra/k8s/overlays/prod
+  API_URL   ?= https://kumbike.org/api
+  KUBECTL   := kubectl --context k3d-kumbi
+  SECRETS   := $(OVERLAY)/secrets.yaml
+else ifeq ($(ENV),test)
+  CLUSTER   := kumbi-test
+  NAMESPACE := kumbi-test
+  IMG_TAG   := test
+  OVERLAY   := infra/k8s/overlays/test
+  API_URL   ?= http://localhost:8080/api
+  KUBECTL   := kubectl --context k3d-kumbi-test
+  SECRETS   := $(OVERLAY)/secrets.yaml
+else
+  CLUSTER   := kumbi-dev
+  NAMESPACE := kumbi
+  IMG_TAG   := dev
+  OVERLAY   := infra/k8s/overlays/dev
+  API_URL   ?= http://localhost/api
+  KUBECTL   := kubectl --context k3d-kumbi-dev
+  SECRETS   := $(OVERLAY)/secrets.yaml
+endif
 
-# kubectl always talks to the right cluster via --context
-DEV_CTX  := k3d-$(DEV_CLUSTER)
-TEST_CTX := k3d-$(TEST_CLUSTER)
+BACKEND_IMG  := kumbi/backend:$(IMG_TAG)
+FRONTEND_IMG := kumbi/frontend:$(IMG_TAG)
 
-KUBECTL      := kubectl
-KUBECTL_DEV  := kubectl --context $(DEV_CTX)
-KUBECTL_TEST := kubectl --context $(TEST_CTX)
-
-# PROD VAR
-PROD_HOST=kumbi
-REMOTE_DEST=~/kumbike.org
-
-# Load .env if it exists
--include $(ENV_FILE)
-export
+# ── Remote (used only when invoking prod from local machine) ──────────────────
+PROD_HOST   := kumbi
+REMOTE_DEST := ~/kumbike.org
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 BOLD  := \033[1m
@@ -41,94 +59,55 @@ INFO  := \033[1;36m[kumbi]\033[0m
 
 log = @echo -e "$(INFO) $(1)"
 
+ENV_FILE ?= .env
+-include $(ENV_FILE)
+export
+
 # ── Help ──────────────────────────────────────────────────────────────────────
 .PHONY: help
 help:
 	@echo ""
 	@echo "  $(BOLD)Kumbi — The People's Baraza$(RESET)"
 	@echo ""
-	@echo "  $(BOLD)Prerequisites$(RESET)"
-	@echo "    brew install k3d   (or: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash)"
-	@echo "    brew install kubectl"
+	@echo "  $(BOLD)Usage$(RESET)"
+	@echo "    make <command> [ENV=dev|test|prod]   default ENV=dev"
 	@echo ""
-	@echo "  $(BOLD)Setup$(RESET)"
-	@echo "    make setup          Install frontend/backend dependencies"
-	@echo "    make k3d-create     Create dev k3d cluster (one-time)"
-	@echo "    make k3d-delete     Delete dev k3d cluster"
+	@echo "  $(BOLD)Core commands$(RESET)"
+	@echo "    make build    ENV=..   Build Docker images"
+	@echo "    make deploy   ENV=..   Full clean-slate deploy (cluster + infra + app + seed)"
+	@echo "    make refresh  ENV=..   Rebuild images and redeploy (no cluster recreate)"
+	@echo "    make migrate  ENV=..   Re-run DB migrations (restarts backend)"
 	@echo ""
-	@echo "  $(BOLD)Dev (k3d — identical infra to all environments)$(RESET)"
-	@echo "    make dev            Build images, load into k3d, deploy dev overlay"
-	@echo "    make refresh        Rebuild images + redeploy (fastest iteration loop)"
-	@echo "    make migrate        Re-run DB migrations (restarts backend pod)"
-	@echo "    make k8s-dev-up     Same as dev"
-	@echo "    make k8s-dev-down   Remove kumbi namespace from dev cluster"
-	@echo "    make k8s-dev-seed   Re-run seed-admin job"
-	@echo "    make k8s-status     Show pods/svc/ingress in dev cluster"
+	@echo "  $(BOLD)Cluster$(RESET)"
+	@echo "    make cluster-create  ENV=..   Create k3d cluster"
+	@echo "    make cluster-delete  ENV=..   Delete k3d cluster"
+	@echo "    make status          ENV=..   Show pods/svc/ingress"
+	@echo "    make teardown        ENV=..   ⚠ Delete namespace (prompts)"
 	@echo ""
-	@echo "  $(BOLD)Test (separate k3d cluster)$(RESET)"
-	@echo "    make k3d-test-create  Create test k3d cluster"
-	@echo "    make k8s-test-up      Build, load, deploy test overlay"
-	@echo "    make k8s-test-down    Remove kumbi-test namespace"
+	@echo "  $(BOLD)Prod extras (run from local machine)$(RESET)"
+	@echo "    make sync                     Rsync source to VPS"
+	@echo "    make remote CMD=<command>     Run any make command on VPS"
+	@echo "    make scale-up                 Scale backend+frontend to 3 replicas"
+	@echo "    make scale-down               Scale backend+frontend to 1 replica"
+	@echo "    make scale BACKEND=N FRONTEND=N"
 	@echo ""
-	@echo "  $(BOLD)Staging / Prod (registry-based)$(RESET)"
-	@echo "    make k8s-staging-build  Build + push staging images"
-	@echo "    make k8s-staging-apply  Apply staging overlay"
-	@echo "    make k8s-prod-deploy    Full prod deploy (build+apply+rollout+seed)"
-	@echo "    make k8s-teardown       Delete kumbi namespace (destructive)"
-	@echo ""
-	@echo "  $(BOLD)User management$(RESET)"
-	@echo "    make seed           Seed/reset admin user (native)"
+	@echo "  $(BOLD)Other$(RESET)"
+	@echo "    make setup            Install frontend/backend dependencies"
+	@echo "    make test             Run tests"
+	@echo "    make lint             Run linters"
+	@echo "    make seed             Seed/reset admin user"
 	@echo "    make create-user NAME=.. EMAIL=.. PASS=.. ROLE=.."
 	@echo ""
-	@echo "  Variables: REGISTRY=$(REGISTRY)  TAG=$(TAG)"
-	@echo "             DEV_CLUSTER=$(DEV_CLUSTER)  TEST_CLUSTER=$(TEST_CLUSTER)"
+	@echo "  Current ENV=$(ENV)  CLUSTER=$(CLUSTER)  NAMESPACE=$(NAMESPACE)"
 	@echo ""
 
-# ── Dependencies ──────────────────────────────────────────────────────────────
+# ── Setup ─────────────────────────────────────────────────────────────────────
 .PHONY: setup
 setup:
 	$(call log,Installing frontend dependencies...)
 	cd frontend && bun install
 	$(call log,Downloading backend modules...)
 	cd backend && go mod download
-
-# ── k3d image import — rootless Docker compatible ─────────────────────────────
-# k3d image import uses a tools container that needs /var/run/docker.sock,
-# which doesn't exist in rootless Docker. Pipe via docker exec instead.
-define import-image
-	docker save $(1) | docker exec -i k3d-$(2)-server-0 ctr images import -
-endef
-
-# ── k3d cluster lifecycle ─────────────────────────────────────────────────────
-.PHONY: k3d-create
-k3d-create:
-	$(call log,Creating dev k3d cluster '$(DEV_CLUSTER)'...)
-	k3d cluster create --config infra/k3d/dev-cluster.yaml
-	k3d kubeconfig merge $(DEV_CLUSTER) --kubeconfig-merge-default
-	$(call log,Cluster ready — context: $(DEV_CTX))
-
-.PHONY: k3d-delete
-k3d-delete:
-	$(call log,Deleting dev k3d cluster '$(DEV_CLUSTER)'...)
-	k3d cluster delete $(DEV_CLUSTER)
-
-.PHONY: k3d-test-create
-k3d-test-create:
-	$(call log,Creating test k3d cluster '$(TEST_CLUSTER)'...)
-	k3d cluster create --config infra/k3d/test-cluster.yaml
-	k3d kubeconfig merge $(TEST_CLUSTER) --kubeconfig-merge-default
-
-.PHONY: k3d-test-delete
-k3d-test-delete:
-	k3d cluster delete $(TEST_CLUSTER)
-
-# ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build
-build:
-	$(call log,Building frontend...)
-	cd frontend && bun run build
-	$(call log,Building backend...)
-	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/server ./cmd/server
 
 .PHONY: test
 test:
@@ -140,275 +119,184 @@ lint:
 	cd backend && go vet ./...
 	cd frontend && bun run lint
 
-# ── Docker Compose (local tooling helper only) ────────────────────────────────
-.PHONY: compose-up compose-down compose-logs
-compose-up:   ; docker compose up --build -d
-compose-down: ; docker compose down
-compose-logs: ; docker compose logs -f
+# ── Secrets check ─────────────────────────────────────────────────────────────
+.PHONY: _secrets-check
+_secrets-check:
+	@[[ -f "$(SECRETS)" ]] || { \
+	  echo -e "\033[1;31m[error]\033[0m Missing $(SECRETS)"; \
+	  echo "  cp $(SECRETS).example $(SECRETS)"; \
+	  exit 1; }
+	@grep -q "CHANGE_ME" "$(SECRETS)" && { \
+	  echo -e "\033[1;31m[error]\033[0m $(SECRETS) still has CHANGE_ME values"; exit 1; } || true
 
-# ── dev = k8s-dev-up ──────────────────────────────────────────────────────────
-.PHONY: dev
-dev: k8s-dev-up
+# ── k3d image import — rootless Docker compatible ─────────────────────────────
+define import-image
+	docker save $(1) | docker exec -i k3d-$(2)-server-0 ctr images import -
+endef
 
-# ── refresh — rebuild images and redeploy to dev cluster (no cluster recreate) ─
+# ── Cluster lifecycle ─────────────────────────────────────────────────────────
+.PHONY: cluster-create
+cluster-create:
+	$(call log,Creating $(ENV) cluster '$(CLUSTER)'...)
+	k3d cluster create --config infra/k3d/$(ENV)-cluster.yaml
+	k3d kubeconfig merge $(CLUSTER) --kubeconfig-merge-default
+	$(call log,Cluster ready — context: k3d-$(CLUSTER))
+
+.PHONY: cluster-delete
+cluster-delete:
+	$(call log,Deleting $(ENV) cluster '$(CLUSTER)'...)
+	k3d cluster delete $(CLUSTER)
+
+.PHONY: status
+status:
+	$(KUBECTL) get pods,svc,ingress,jobs -n $(NAMESPACE)
+
+.PHONY: teardown
+teardown:
+	@read -rp "Delete namespace $(NAMESPACE) from $(ENV) cluster? [y/N] " confirm; \
+	  [[ "$$confirm" =~ ^[Yy]$$ ]] || { echo "Aborted"; exit 0; }; \
+	  $(KUBECTL) delete namespace $(NAMESPACE) --ignore-not-found
+	$(call log,Namespace $(NAMESPACE) deleted)
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+.PHONY: build
+build:
+	$(call log,Building images for ENV=$(ENV)...)
+	docker build -t $(BACKEND_IMG) ./backend
+	docker build --build-arg VITE_API_BASE_URL=$(API_URL) \
+	  -t $(FRONTEND_IMG) ./frontend
+	$(call log,Loading images into cluster '$(CLUSTER)'...)
+	$(call import-image,$(BACKEND_IMG),$(CLUSTER))
+	$(call import-image,$(FRONTEND_IMG),$(CLUSTER))
+
+# ── Deploy — full clean-slate ─────────────────────────────────────────────────
+.PHONY: deploy
+deploy: _secrets-check
+	$(call log,Starting clean-slate deploy for ENV=$(ENV)...)
+	# Wipe existing cluster and Docker state
+	k3d cluster stop $(CLUSTER) 2>/dev/null || true
+	k3d cluster delete $(CLUSTER) 2>/dev/null || true
+	docker system prune -af --volumes 2>/dev/null || true
+	# Fresh cluster
+	$(MAKE) cluster-create ENV=$(ENV)
+ifeq ($(ENV),prod)
+	# Install NGINX ingress
+	$(MAKE) _install-ingress
+	# Install cert-manager + ClusterIssuer
+	$(MAKE) _install-cert-manager
+endif
+	# Build and load images
+	$(MAKE) build ENV=$(ENV)
+	# Apply overlay
+	$(KUBECTL) apply -k $(OVERLAY)
+	# Wait for rollout
+	$(KUBECTL) rollout status deployment/backend  -n $(NAMESPACE) --timeout=180s
+	$(KUBECTL) rollout status deployment/frontend -n $(NAMESPACE) --timeout=180s
+	# Seed admin
+	$(MAKE) _seed ENV=$(ENV)
+	$(call log,Deploy complete — ENV=$(ENV))
+	$(MAKE) status ENV=$(ENV)
+
+# ── Refresh — rebuild + redeploy, no cluster recreate ────────────────────────
 .PHONY: refresh
 refresh:
-	$(call log,Building images...)
-	docker build -t $(BACKEND_IMG):dev ./backend
-	docker build \
-	  --build-arg VITE_API_BASE_URL=$${VITE_API_BASE_URL:-http://localhost/api} \
-	  -t $(FRONTEND_IMG):dev ./frontend
-	$(call log,Importing images into k3d cluster '$(DEV_CLUSTER)'...)
-	$(call import-image,$(BACKEND_IMG):dev,$(DEV_CLUSTER))
-	$(call import-image,$(FRONTEND_IMG):dev,$(DEV_CLUSTER))
-	$(call log,Rolling out new images...)
-	$(KUBECTL_DEV) rollout restart deployment/backend deployment/frontend -n kumbi
-	$(KUBECTL_DEV) rollout status  deployment/backend deployment/frontend -n kumbi --timeout=120s
-	$(call log,Done — http://localhost)
+	$(call log,Refreshing ENV=$(ENV)...)
+	$(MAKE) build ENV=$(ENV)
+	$(KUBECTL) rollout restart deployment/backend deployment/frontend -n $(NAMESPACE)
+	$(KUBECTL) rollout status  deployment/backend deployment/frontend -n $(NAMESPACE) --timeout=120s
+	$(call log,Refresh complete)
 
-# ── migrate — trigger migrations by restarting the backend pod ────────────────
-# Migrations run automatically on every backend startup via db.Migrate().
-# This command forces a restart to re-run them against the current schema.
+# ── Migrate — restart backend to re-run migrations ───────────────────────────
 .PHONY: migrate
 migrate:
-	$(call log,Restarting backend to run migrations...)
-	$(KUBECTL_DEV) rollout restart deployment/backend -n kumbi
-	$(KUBECTL_DEV) rollout status  deployment/backend -n kumbi --timeout=60s
+	$(call log,Running migrations for ENV=$(ENV)...)
+	$(KUBECTL) rollout restart deployment/backend -n $(NAMESPACE)
+	$(KUBECTL) rollout status  deployment/backend -n $(NAMESPACE) --timeout=60s
 	$(call log,Migrations complete)
 
-# ── k8s dev overlay (k3d) ─────────────────────────────────────────────────────
-.PHONY: _dev-secrets-check
-_dev-secrets-check:
-	@[[ -f infra/k8s/overlays/dev/secrets.yaml ]] || { \
-	  echo -e "\033[1;31m[error]\033[0m Missing infra/k8s/overlays/dev/secrets.yaml"; \
-	  echo "  cp infra/k8s/overlays/dev/secrets.yaml.example infra/k8s/overlays/dev/secrets.yaml"; \
-	  exit 1; }
-
-.PHONY: k8s-dev-up
-k8s-dev-up: _dev-secrets-check
-	$(call log,Ensuring dev cluster exists...)
-	@k3d cluster list | grep -q "$(DEV_CLUSTER)" || $(MAKE) k3d-create
-	$(call log,Building images...)
-	docker build -t $(BACKEND_IMG):dev ./backend
-	docker build \
-	  --build-arg VITE_API_BASE_URL=$${VITE_API_BASE_URL:-http://localhost/api} \
-	  -t $(FRONTEND_IMG):dev ./frontend
-	$(call log,Loading images into k3d cluster '$(DEV_CLUSTER)'...)
-	$(call import-image,$(BACKEND_IMG):dev,$(DEV_CLUSTER))
-	$(call import-image,$(FRONTEND_IMG):dev,$(DEV_CLUSTER))
-	$(call log,Applying dev overlay...)
-	$(KUBECTL_DEV) apply -k infra/k8s/overlays/dev
-	$(call log,Waiting for rollout...)
-	$(KUBECTL_DEV) rollout status deployment/backend  -n kumbi --timeout=120s
-	$(KUBECTL_DEV) rollout status deployment/frontend -n kumbi --timeout=120s
-	$(MAKE) k8s-dev-seed
-	$(call log,Dev cluster ready)
-	$(call log,  Frontend: http://localhost)
-	$(call log,  Backend:  http://localhost/api)
-	$(call log,  CMS:      http://localhost/cms)
-
-.PHONY: k8s-dev-down
-k8s-dev-down:
-	$(KUBECTL_DEV) delete namespace kumbi --ignore-not-found
-
-.PHONY: k8s-dev-seed
-k8s-dev-seed:
-	$(KUBECTL_DEV) delete job seed-admin -n kumbi --ignore-not-found
-	$(KUBECTL_DEV) apply -f infra/k8s/base/seed-job.yaml
-	$(KUBECTL_DEV) wait --for=condition=complete job/seed-admin -n kumbi --timeout=60s
-	$(KUBECTL_DEV) logs -n kumbi -l job-name=seed-admin
-
-.PHONY: k8s-status
-k8s-status:
-	$(KUBECTL_DEV) get pods,svc,ingress,jobs -n kumbi
-
-# ── k8s test overlay (separate k3d cluster) ───────────────────────────────────
-.PHONY: _test-secrets-check
-_test-secrets-check:
-	@[[ -f infra/k8s/overlays/test/secrets.yaml ]] || { \
-	  echo -e "\033[1;31m[error]\033[0m Missing infra/k8s/overlays/test/secrets.yaml"; \
-	  echo "  cp infra/k8s/overlays/test/secrets.yaml.example infra/k8s/overlays/test/secrets.yaml"; \
-	  exit 1; }
-
-.PHONY: k8s-test-up
-k8s-test-up: _test-secrets-check
-	@k3d cluster list | grep -q "$(TEST_CLUSTER)" || $(MAKE) k3d-test-create
-	docker build -t $(BACKEND_IMG):test ./backend
-	docker build \
-	  --build-arg VITE_API_BASE_URL=$${VITE_API_BASE_URL:-http://localhost:8080/api} \
-	  -t $(FRONTEND_IMG):test ./frontend
-	$(call import-image,$(BACKEND_IMG):test,$(TEST_CLUSTER))
-	$(call import-image,$(FRONTEND_IMG):test,$(TEST_CLUSTER))
-	$(KUBECTL_TEST) apply -k infra/k8s/overlays/test
-	$(KUBECTL_TEST) rollout status deployment/backend  -n kumbi-test --timeout=120s
-	$(KUBECTL_TEST) rollout status deployment/frontend -n kumbi-test --timeout=120s
-	$(call log,Test cluster ready — http://localhost:8080)
-
-.PHONY: k8s-test-down
-k8s-test-down:
-	$(KUBECTL_TEST) delete namespace kumbi-test --ignore-not-found
-
-# ── k8s staging overlay ───────────────────────────────────────────────────────
-.PHONY: _staging-secrets-check
-_staging-secrets-check:
-	@[[ -f infra/k8s/overlays/staging/secrets.yaml ]] || { \
-	  echo -e "\033[1;31m[error]\033[0m Missing infra/k8s/overlays/staging/secrets.yaml"; \
-	  exit 1; }
-	@grep -q "CHANGE_ME" infra/k8s/overlays/staging/secrets.yaml && { \
-	  echo -e "\033[1;31m[error]\033[0m staging secrets.yaml still has CHANGE_ME values"; exit 1; } || true
-
-.PHONY: k8s-staging-build
-k8s-staging-build:
-	docker build -t $(REGISTRY)/$(BACKEND_IMG):$(TAG) ./backend
-	docker push $(REGISTRY)/$(BACKEND_IMG):$(TAG)
-	docker build --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
-	  -t $(REGISTRY)/$(FRONTEND_IMG):$(TAG) ./frontend
-	docker push $(REGISTRY)/$(FRONTEND_IMG):$(TAG)
-
-.PHONY: k8s-staging-apply
-k8s-staging-apply: _staging-secrets-check
-	$(KUBECTL) apply -k infra/k8s/overlays/staging
-
-# ── k8s prod overlay ──────────────────────────────────────────────────────────
-.PHONY: _prod-secrets-check
-_prod-secrets-check:
-	@[[ -f infra/k8s/overlays/prod/secrets.yaml ]] || { \
-	  echo -e "\033[1;31m[error]\033[0m Missing infra/k8s/overlays/prod/secrets.yaml"; \
-	  exit 1; }
-	@grep -q "CHANGE_ME" infra/k8s/overlays/prod/secrets.yaml && { \
-	  echo -e "\033[1;31m[error]\033[0m prod secrets.yaml still has CHANGE_ME values"; exit 1; } || true
-
-# ── Staging / Prod (registry-based) ───────────────────────────────────────────
-
-# Sync local source to the VPS using the 'ndiku' SSH alias
-.PHONY: prod-sync
-prod-sync:
-	$(call log,Syncing code to $(PROD_HOST)...)
-	rsync -avz --exclude='.git' --exclude='node_modules' --exclude='backend/bin' ./ $(PROD_HOST):$(REMOTE_DEST)/
-
-# Run this once on the VPS to allow k3d/Docker to bind to 80/443 if using rootless
-.PHONY: prod-prep-ports
-k8s-prod-prep-ports:
-	ssh $(PROD_HOST) "sudo sysctl net.ipv4.ip_unprivileged_port_start=80"
-
-.PHONY: k8s-prod-cluster-create
-k8s-prod-cluster-create:
-	$(call log,Creating prod k3d cluster on $(PROD_HOST)...)
-	ssh $(PROD_HOST) "k3d cluster create --config $(REMOTE_DEST)/infra/k3d/prod-cluster.yaml || true" 
-
-.PHONY: prod-check-ssl
-prod-check-ssl:
-	$(call log,Verifying SSL for kumbike.org...)
-	@curl -vI https://kumbike.org 2>&1 | grep "SSL certificate" || echo "SSL not ready yet - wait a few mins for cert-manager"
-
-.PHONY: k8s-prod-install-ingress
-k8s-prod-install-ingress:
-	$(call log,Installing NGINX Ingress Controller...)
-	ssh $(PROD_HOST) "kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml"
-	$(call log,Waiting for Ingress Controller...)
-	ssh $(PROD_HOST) "kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s"
-
-#
-.PHONY: k8s-prod-build
-k8s-prod-build:
-	docker build -t $(REGISTRY)/$(BACKEND_IMG):$(TAG) ./backend
-	docker push $(REGISTRY)/$(BACKEND_IMG):$(TAG)
-	docker build --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
-	  -t $(REGISTRY)/$(FRONTEND_IMG):$(TAG) ./frontend
-	docker push $(REGISTRY)/$(FRONTEND_IMG):$(TAG)
-
-.PHONY: k8s-prod-apply
-k8s-prod-apply: _prod-secrets-check
-	$(KUBECTL) apply -k infra/k8s/overlays/prod
-
-.PHONY: k8s-prod-rollout
-k8s-prod-rollout:
-	$(KUBECTL) rollout restart deployment/backend  -n kumbi
-	$(KUBECTL) rollout restart deployment/frontend -n kumbi
-	$(KUBECTL) rollout status  deployment/backend  -n kumbi
-	$(KUBECTL) rollout status  deployment/frontend -n kumbi
-
-.PHONY: k8s-prod-seed
-k8s-prod-seed:
-	$(KUBECTL) delete job seed-admin -n kumbi --ignore-not-found
+# ── Seed ──────────────────────────────────────────────────────────────────────
+.PHONY: _seed
+_seed:
+	$(KUBECTL) delete job seed-admin -n $(NAMESPACE) --ignore-not-found
 	$(KUBECTL) apply -f infra/k8s/base/seed-job.yaml
-	$(KUBECTL) wait --for=condition=complete job/seed-admin -n kumbi --timeout=60s
-	$(KUBECTL) logs -n kumbi -l job-name=seed-admin
+	$(KUBECTL) wait --for=condition=complete job/seed-admin -n $(NAMESPACE) --timeout=60s
+	$(KUBECTL) logs -n $(NAMESPACE) -l job-name=seed-admin
 
-.PHONY: k8s-prod-install-cert-manager
-k8s-prod-install-cert-manager:
-	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.yaml
-	@echo "Waiting for cert-manager..."
-	kubectl wait --for=condition=Available deployment --all -n cert-manager --timeout=120s
+# ── Prod infra helpers (run locally on VPS) ───────────────────────────────────
+.PHONY: _install-ingress
+_install-ingress:
+	$(call log,Installing NGINX Ingress Controller...)
+	kubectl --context k3d-$(CLUSTER) apply -f \
+	  https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml
+	kubectl --context k3d-$(CLUSTER) wait --namespace ingress-nginx \
+	  --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=180s
 
-.PHONY: k8s-prod-setup-ssl
-k8s-prod-setup-ssl:
-	kubectl apply -f cert-issuer.yaml # Your ClusterIssuer manifest
+.PHONY: _install-cert-manager
+_install-cert-manager:
+	$(call log,Installing cert-manager...)
+	kubectl --context k3d-$(CLUSTER) apply -f \
+	  https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.yaml
+	$(call log,Waiting for cert-manager...)
+	kubectl --context k3d-$(CLUSTER) wait --for=condition=Available \
+	  deployment --all -n cert-manager --timeout=180s
+	$(call log,Applying ClusterIssuer...)
+	kubectl --context k3d-$(CLUSTER) apply -f $(OVERLAY)/issuer.yaml
 
-.PHONY: k8s-prod-check-live
-k8s-prod-check-live:
-	@echo "Checking SSL for kumbike.org...."
-curl -vI https://kumbike.org 2>&1 | grep "SSl Certificate"
-	@echo "Checking Kubernetes Pods...."
-	ssh $(REMOTE_HOST) "kubectl get pods -n kumbi"
+# ── Remote helpers (invoke prod commands from local machine via SSH) ───────────
+# Usage: make sync
+#        make remote CMD=deploy ENV=prod
+#        make remote CMD=refresh ENV=prod
+#        make remote CMD=migrate ENV=prod
+.PHONY: sync
+sync:
+	$(call log,Syncing source to $(PROD_HOST):$(REMOTE_DEST)...)
+	rsync -avz --exclude='.git' --exclude='node_modules' --exclude='backend/bin' \
+	  --exclude='infra/k8s/overlays/prod/secrets.yaml' \
+	  ./ $(PROD_HOST):$(REMOTE_DEST)/
 
-.PHONY: k8s-prod-deploy
-k8s-prod-deploy: prod-sync
-	$(call log,Starting remote production deployment...)
-	# Create prod cluster
-	$(MAKE) k8s-prod-cluster-create
-	$(MAKE) k8s-prod-install-ingress
-	# Build and push images to registry 
-	$(MAKE) k8s-prod-build
-	# Apply manifests 
-	ssh $(PROD_HOST) "cd $(REMOTE_DEST) && \
-						$(MAKE) k8s-prod-apply && \
-						$(MAKE) k8s-prod-install-cert-manager && \
-						$(MAKE) k8s-prod-setup-ssl && \
-						$(MAKE) k8s-prod-rollout"
-	$(MAKE) k8s-prod-seed
-	$(call log,Production Deployment Complete)
-	$(MAKE) prod-check-ssl 
-	$(call log,SSL Check Completed)
-	$(MAKE) k8s-status 
+.PHONY: remote
+remote: sync
+	$(call log,Running 'make $(CMD) ENV=$(or $(ENV),prod)' on $(PROD_HOST)...)
+	ssh $(PROD_HOST) "cd $(REMOTE_DEST) && make $(CMD) ENV=$(or $(ENV),prod)"
 
+# ── Scaling (prod only) ───────────────────────────────────────────────────────
+BACKEND_REPLICAS  ?= 3
+FRONTEND_REPLICAS ?= 3
 
+.PHONY: scale
+scale:
+	$(KUBECTL) scale deployment/backend  --replicas=$(BACKEND_REPLICAS)  -n $(NAMESPACE)
+	$(KUBECTL) scale deployment/frontend --replicas=$(FRONTEND_REPLICAS) -n $(NAMESPACE)
+	$(call log,backend=$(BACKEND_REPLICAS) frontend=$(FRONTEND_REPLICAS))
 
-.PHONY: k8s-teardown
-k8s-teardown:
-	@read -rp "Delete ALL kumbi resources from the cluster? [y/N] " confirm; \
-	  [[ "$$confirm" =~ ^[Yy]$$ ]] || { echo "Aborted"; exit 0; }; \
-	  $(KUBECTL) delete namespace kumbi --ignore-not-found; \
-	  echo -e "$(INFO) Namespace kumbi deleted"
+.PHONY: scale-up
+scale-up:
+	$(MAKE) scale ENV=$(ENV) BACKEND_REPLICAS=3 FRONTEND_REPLICAS=3
+
+.PHONY: scale-down
+scale-down:
+	$(MAKE) scale ENV=$(ENV) BACKEND_REPLICAS=1 FRONTEND_REPLICAS=1
 
 # ── User management ───────────────────────────────────────────────────────────
+.PHONY: _check-env-file
+_check-env-file:
+	@[[ -f "$(ENV_FILE)" ]] || { \
+	  echo -e "\033[1;31m[error]\033[0m Missing $(ENV_FILE) — cp .env.example .env"; \
+	  exit 1; }
+
 .PHONY: seed
-seed: _check-env
+seed: _check-env-file
 	cd backend && go run ./cmd/seed admin "$(SEED_ADMIN_EMAIL)" "$(SEED_ADMIN_PASSWORD)"
 
 .PHONY: create-user
-create-user: _check-env
+create-user: _check-env-file
 	@[[ -n "$(NAME)" && -n "$(EMAIL)" && -n "$(PASS)" ]] || { \
 	  echo "Usage: make create-user NAME='Jane Doe' EMAIL=jane@example.com PASS=secret ROLE=admin"; \
 	  exit 1; }
 	cd backend && go run ./cmd/seed create-user "$(NAME)" "$(EMAIL)" "$(PASS)" "$(or $(ROLE),admin)"
 
-# ── Internal ──────────────────────────────────────────────────────────────────
-.PHONY: _check-env
-_check-env:
-	@[[ -f "$(ENV_FILE)" ]] || { \
-	  echo -e "\033[1;31m[error]\033[0m Missing $(ENV_FILE) — cp .env.example .env"; \
-	  exit 1; }
-
-# Load .env if it exists (for native dev targets)
--include $(ENV_FILE)
-export
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-BOLD  := \033[1m
-RESET := \033[0m
-INFO  := \033[1;36m[kumbi]\033[0m
-
-log = @echo -e "$(INFO) $(1)"
-
-# ── Help ──────────────────────────────────────────────────────────────────────
+# ── Docker Compose (local tooling helper) ─────────────────────────────────────
+.PHONY: compose-up compose-down compose-logs
+compose-up:   ; docker compose up --build -d
+compose-down: ; docker compose down
+compose-logs: ; docker compose logs -f
