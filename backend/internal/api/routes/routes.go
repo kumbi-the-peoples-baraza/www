@@ -1,14 +1,17 @@
 package routes
 
 import (
+	"kumbi/internal/api/handlers"
+	"kumbi/internal/api/middleware"
+	"kumbi/internal/config"
 	"net/http"
+
+	nbhandlers "kumbi/internal/notebooks/handlers"
+	nbservices "kumbi/internal/notebooks/services"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kumbi/backend/internal/api/handlers"
-	"github.com/kumbi/backend/internal/api/middleware"
-	"github.com/kumbi/backend/internal/config"
 	"github.com/rs/zerolog"
 )
 
@@ -30,18 +33,17 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 	r.Static("/storage", cfg.StoragePath)
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 
-	authH       := handlers.NewAuthHandler(db, cfg)
-	pagesH      := handlers.NewPagesHandler(db)
-	formsH      := handlers.NewFormsHandler(db, cfg)
-	mediaH      := handlers.NewMediaHandler(db, cfg)
-	notebooksH  := handlers.NewNotebooksHandler(db, cfg)
+	authH := handlers.NewAuthHandler(db, cfg)
+	pagesH := handlers.NewPagesHandler(db)
+	formsH := handlers.NewFormsHandler(db, cfg)
+	mediaH := handlers.NewMediaHandler(db, cfg)
 	appearanceH := handlers.NewAppearanceHandler(db)
-	usersH      := handlers.NewUsersHandler(db)
-	analyticsH  := handlers.NewAnalyticsHandler(db)
-	contentH    := handlers.NewContentHandler(db)
-	blogH       := handlers.NewBlogHandler(db)
-	configH     := handlers.NewConfigHandler(db)
-	peopleH     := handlers.NewPeopleHandler(db)
+	usersH := handlers.NewUsersHandler(db)
+	analyticsH := handlers.NewAnalyticsHandler(db)
+	contentH := handlers.NewContentHandler(db)
+	blogH := handlers.NewBlogHandler(db)
+	configH := handlers.NewConfigHandler(db)
+	peopleH := handlers.NewPeopleHandler(db)
 
 	v1 := r.Group("/api/v1")
 
@@ -86,11 +88,6 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 		cms.PUT("/media/:id/gallery", middleware.RequireRole("admin", "editor"), mediaH.SetGallery)
 		cms.DELETE("/media/:id", middleware.RequireRole("admin"), mediaH.Delete)
 
-		cms.POST("/notebooks", middleware.RequireRole("admin", "editor"), notebooksH.Upload)
-		cms.POST("/notebooks/import-github", middleware.RequireRole("admin", "editor"), notebooksH.ImportFromGitHub)
-		cms.GET("/notebooks", notebooksH.List)
-		cms.GET("/notebooks/:id", notebooksH.Get)
-
 		cms.PUT("/appearance", middleware.RequireRole("admin"), appearanceH.Update)
 		cms.PUT("/config", middleware.RequireRole("admin", "editor"), configH.Update)
 
@@ -101,6 +98,11 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 
 		cms.PUT("/analytics", middleware.RequireRole("admin"), analyticsH.Update)
 		cms.GET("/analytics/stats", middleware.RequireRole("admin", "editor"), analyticsH.Stats)
+
+		nbSvc := nbservices.NewNotebookService(db)
+		nbHandler := nbhandlers.NewNotebookHandler(nbSvc)
+
+		nbHandler.RegisterRoutes(v1, cms)
 
 		cms.GET("/dashboard/stats", func(c *gin.Context) {
 			var pages, users, submissions, views int

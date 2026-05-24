@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"kumbi/internal/auth"
+	"kumbi/internal/config"
+	"kumbi/internal/db"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kumbi/backend/internal/auth"
-	"github.com/kumbi/backend/internal/config"
-	"github.com/kumbi/backend/internal/db"
 )
 
 func main() {

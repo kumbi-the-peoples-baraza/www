@@ -176,7 +176,7 @@ deploy: _secrets-check
 	# Wipe existing cluster and Docker state
 	k3d cluster stop $(CLUSTER) 2>/dev/null || true
 	k3d cluster delete $(CLUSTER) 2>/dev/null || true
-	docker system prune -af --volumes 2>/dev/null || true
+	#docker system prune -af --volumes 2>/dev/null || true
 	# Fresh cluster
 	$(MAKE) cluster-create ENV=$(ENV)
 ifeq ($(ENV),prod)
@@ -218,7 +218,7 @@ migrate:
 .PHONY: _seed
 _seed:
 	$(KUBECTL) delete job seed-admin -n $(NAMESPACE) --ignore-not-found
-	$(KUBECTL) apply -f infra/k8s/base/seed-job.yaml
+	$(KUBECTL) apply -k $(OVERLAY)
 	$(KUBECTL) wait --for=condition=complete job/seed-admin -n $(NAMESPACE) --timeout=60s
 	$(KUBECTL) logs -n $(NAMESPACE) -l job-name=seed-admin
 

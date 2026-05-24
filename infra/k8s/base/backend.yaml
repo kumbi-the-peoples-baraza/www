@@ -1,13 +1,30 @@
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: backend-config
   namespace: kumbi
 data:
-  PORT: "8080"
+  PORT: '8080'
   ENV: production
   STORAGE_PATH: /app/storage
 ---
+# apiVersion: v1
+# kind: PersistentVolume
+# metadata:
+#   name: storage-pv
+#   labels:
+#     type: local
+#     app: backend
+# spec:
+#   capacity:
+#     storage: 5Gi
+#   accessModes: [ReadWriteMany]
+#   hostPath:
+#     path: /app/storage
+#   persistentVolumeReclaimPolicy: Retain
+#   storageClassName: manual
+#---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -18,6 +35,7 @@ spec:
   resources:
     requests:
       storage: 5Gi
+  storageClassName: local-path-retain
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -34,6 +52,8 @@ spec:
       labels:
         app: backend
     spec:
+      securityContext:
+        fsGroup: 65534
       containers:
         - name: backend
           image: kumbi/backend:latest
@@ -45,7 +65,7 @@ spec:
           ports:
             - containerPort: 8080
           volumeMounts:
-            - name: storage
+            - name: storage-pvc
               mountPath: /app/storage
           readinessProbe:
             httpGet:
@@ -54,7 +74,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
       volumes:
-        - name: storage
+        - name: storage-pvc
           persistentVolumeClaim:
             claimName: storage-pvc
 ---

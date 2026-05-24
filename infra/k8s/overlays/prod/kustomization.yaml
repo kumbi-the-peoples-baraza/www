@@ -3,24 +3,60 @@ kind: Kustomization
 
 resources:
 - ../../base
-- ingress.yaml
 - secrets.yaml
 
-# Images are built directly on the VPS and sideloaded into k3d via
-# docker save | ctr images import. No external registry required.
-images:
-- name: kumbi/backend
-  newTag: prod
-- name: kumbi/frontend
-  newTag: prod
-
-replicas:
-- count: 3
-  name: backend
-- count: 3
-  name: frontend
-
 patches:
+  - patch: |-
+      - op: replace
+        path: /spec/ingressClassName
+        value: nginx
+      - op: add
+        path: /metadata/annotations
+        value:
+          nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+          cert-manager.io/cluster-issuer: "letsencrypt-prod"
+          nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      - op: replace
+        path: /spec/rules
+        value:
+          - host: kumbike.org
+            http:
+              paths:
+                - path: /api
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: backend
+                      port:
+                        number: 8080
+                - path: /storage
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: backend
+                      port:
+                        number: 8080
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: frontend
+                      port:
+                        number: 80
+      - op: add
+        path: /spec/tls
+        value:
+          - hosts:
+              - kumbike.org
+              - www.kumbike.org
+              - trace.kumbike.org
+              - vote.kumbike.org
+              - oops.kumbike.org
+              - dev.kumbike.org
+            secretName: kumbi-tls-cert
+    target:
+      kind: Ingress
+      name: kumbi
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy

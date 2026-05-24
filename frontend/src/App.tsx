@@ -15,6 +15,7 @@ const BlogPostPage = lazy(() => import('@/components/pages/BlogPost'))
 const About = lazy(() => import('@/components/pages/About'))
 const Volunteer = lazy(() => import('@/components/pages/Volunteer'))
 const Login = lazy(() => import('@/components/pages/Login'))
+const PublicNotebookPage = lazy(() => import('@/components/pages/Notebook').then(m => ({ default: m.PublicNotebookPage })))
 
 const CMSDashboard = lazy(() => import('@/components/cms/Dashboard'))
 const CMSPages = lazy(() => import('@/components/cms/Pages'))
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Home />} />
             <Route path="/volunteer" element={<Volunteer />} />
+            <Route path="/n/:slug" element={<PublicNotebookPage />} />
           </Route>
           <Route path="/login" element={<Login />} />
           <Route

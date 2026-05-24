@@ -1,12 +1,12 @@
 package handlers
 
 import (
+	"kumbi/internal/auth"
+	"kumbi/internal/config"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kumbi/backend/internal/auth"
-	"github.com/kumbi/backend/internal/config"
 )
 
 type AuthHandler struct {

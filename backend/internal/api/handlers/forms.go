@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"kumbi/internal/config"
+	"kumbi/internal/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kumbi/backend/internal/config"
-	"github.com/kumbi/backend/internal/services"
 )
 
 type FormsHandler struct {

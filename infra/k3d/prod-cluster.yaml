@@ -1,19 +1,23 @@
+---
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
-  name: kumbi # Matches your PROD_CLUSTER name
-
+  name: kumbi  # Matches your PROD_CLUSTER name
 servers: 1
 agents: 0
-
 image: rancher/k3s:v1.33.6-k3s1
-
 ports:
   - port: 80:80
     nodeFilters: [loadbalancer]
   - port: 443:443
     nodeFilters: [loadbalancer]
-
+volumes:
+  - volume: /home/kumbi/volumes/kumbi-prod/postgres-data:/var/lib/postgres
+    nodeFilters: [server:0]
+  - volume: /home/kumbi/volumes/kumbi-prod/storage:/app/storage
+    nodeFilters: [server:0]
+  - volume: /home/kumbi/volumes/kumbi-prod/backups:/app/backups
+    nodeFilters: [server:0]
 options:
   k3s:
     extraArgs:
@@ -27,4 +31,4 @@ options:
         nodeFilters: [server:*]
   k3d:
     wait: true
-    timeout: "120s"
+    timeout: 120s

@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -16,7 +20,31 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@pages/*": [
+        "./src/components/pages/*"
+      ],
+      "@layout/*": [
+        "./src/components/layout/*"
+      ],
+      "@forms/*": [
+        "./src/components/forms/*"
+      ],
+      "@ui/*": [
+        "./src/components/ui/*"
+      ],
+      "@cms/*": [
+        "./src/components/cms/*"
+      ],
+      "@notebooks/*": [
+        "./src/features/notebooks/*"
+      ]
+    }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

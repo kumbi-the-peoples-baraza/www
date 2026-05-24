@@ -1,4 +1,4 @@
-import { Github, Twitter, Facebook, Mail, Phone, MapPin } from 'lucide-react'
+import { Mail, Phone, MapPin, Globe } from 'lucide-react'
 import { useContactStore } from '@/store/contactStore'
 import { useConfig } from '@/hooks/useConfig'
 
@@ -25,7 +25,7 @@ export default function Footer() {
           </div>
           <p className="text-sm leading-relaxed mb-7 max-w-sm" style={{ color: fgMuted }}>{f.about}</p>
           <div className="flex gap-3">
-            {[Github, Twitter, Facebook].map((Icon, i) => (
+            {[Globe, Globe, Globe].map((Icon, i) => (
               <a key={i} href="#" className="w-10 h-10 rounded-xl border flex items-center justify-center hover:bg-primary/10 hover:border-primary hover:text-primary transition-all" style={{ borderColor: border, color: fgMuted }}>
                 <Icon className="w-4 h-4" />
               </a>

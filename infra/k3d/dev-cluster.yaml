@@ -1,3 +1,4 @@
+---
 # k3d cluster config — kumbi-dev
 # Matches the running cluster created with rootless Docker.
 #
@@ -6,24 +7,27 @@
 # NOTE: k3d image import does NOT work with rootless Docker.
 # Use: docker save <img> | docker exec -i k3d-kumbi-dev-server-0 ctr images import -
 # Or:  make k8s-dev-up  (handles this automatically)
-
 apiVersion: k3d.io/v1alpha5
 kind: Simple
-
 metadata:
   name: kumbi-dev
-
 servers: 1
 agents: 0
-
 image: rancher/k3s:v1.33.6-k3s1
-
 ports:
   - port: 80:80
     nodeFilters: [loadbalancer]
   - port: 443:443
     nodeFilters: [loadbalancer]
-
+volumes:
+  - volume: /home/ndiku/code/k8s/volumes/kumbi-dev/postgres-data:/var/lib/postgres/
+    nodeFilters: [server:0]
+  - volume: /home/ndiku/code/k8s/volumes/kumbi-dev/storage:/app/storage/
+    nodeFilters: [server:0]
+  # - volume: /windows/k8s/volumes/kumbi-dev/backups:/app/backups/
+  #   nodeFilters:
+  #     - server:0
+  #     - agent:*
 # Required for rootless Docker / KubeletInUserNamespace
 options:
   k3s:

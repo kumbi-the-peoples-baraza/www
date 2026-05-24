@@ -1,11 +1,11 @@
 package handlers
 
 import (
+	"kumbi/internal/auth"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kumbi/backend/internal/auth"
 )
 
 type UsersHandler struct{ db *pgxpool.Pool }
@@ -56,7 +56,8 @@ func (h *UsersHandler) Create(c *gin.Context) {
 		return
 	}
 	var id string
-	err = h.db.QueryRow(c,
+	err = h.db.QueryRow(
+		c,
 		`INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id`,
 		req.Name, req.Email, hash, req.Role,
 	).Scan(&id)
@@ -90,7 +91,8 @@ func (h *UsersHandler) Update(c *gin.Context) {
 		hash = &h
 	}
 
-	_, err := h.db.Exec(c,
+	_, err := h.db.Exec(
+		c,
 		`UPDATE users SET name=COALESCE($1,name), role=COALESCE($2,role), active=COALESCE($3,active), password=COALESCE($4,password), updated_at=NOW() WHERE id=$5`,
 		req.Name, req.Role, req.Active, hash, id,
 	)

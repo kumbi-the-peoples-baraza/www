@@ -1,11 +1,11 @@
 package middleware
 
 import (
+	"kumbi/internal/auth"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kumbi/backend/internal/auth"
 )
 
 func Auth(jwtSecret string) gin.HandlerFunc {

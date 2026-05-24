@@ -6,10 +6,30 @@ metadata:
   namespace: kumbi
 data:
   POSTGRES_DB: kumbi
-  POSTGRES_USER: fundi
+  POSTGRES_USER: kumbi
 ---
-# postgres-secret (POSTGRES_PASSWORD) is applied from the overlay secrets.yaml
-# Do NOT define it here — it would overwrite the value from secrets.yaml.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-path-retain
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+# apiVersion: v1
+# kind: PersistentVolume
+# metadata:
+#   name: postgres-pv
+#   labels:
+#     type: local
+#     app: postgres
+# spec:
+#   capacity:
+#     storage: 2Gi
+#   accessModes: [ReadWriteOnce]
+#   hostPath:
+#     path: /var/lib/postgres
+#   persistentVolumeReclaimPolicy: Retain
+#   storageClassName: manual
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -21,6 +41,7 @@ spec:
   resources:
     requests:
       storage: 2Gi
+  storageClassName: local-path-retain
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -37,6 +58,15 @@ spec:
       labels:
         app: postgres
     spec:
+      securityContext:
+        fsGroup: 70
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: [sh, -c, chown -R 70:70 /var/lib/postgresql/data]
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -52,7 +82,7 @@ spec:
               mountPath: /var/lib/postgresql/data
           readinessProbe:
             exec:
-              command: [pg_isready, -U, fundi]
+              command: [pg_isready, -U, kumbi]
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:

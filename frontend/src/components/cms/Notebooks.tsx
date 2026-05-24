@@ -1,82 +1,125 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { notebooksApi } from '@/api/client'
-import { useRef, useState } from 'react'
-import { Upload, BookOpen, Github } from 'lucide-react'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { useState } from "react";
+import { Plus, BookOpen, Search } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useNotebooks } from "@notebooks/hooks/useNotebooks";
+import { NotebookCard } from "@notebooks/components/NotebookCard";
+import { NotebookPreviewSheet } from "@notebooks/components/NotebookPreviewSheet";
+import { AddNotebookDialog } from "@notebooks/components/AddNotebookDialog";
+import { AttachNotebookDialog } from "@notebooks/components/AttachNotebookDialog";
+import type { Notebook } from "@/types";
 
-export default function Notebooks() {
-  const qc = useQueryClient()
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [githubUrl, setGithubUrl] = useState('')
-  const [showGithub, setShowGithub] = useState(false)
+type StatusFilter = "all" | "active" | "archived";
 
-  const { data: notebooks = [], isLoading } = useQuery({
-    queryKey: ['notebooks'],
-    queryFn: () => notebooksApi.list().then(r => r.data),
-  })
+export default function CmsNotebooksPage() {
+  const { notebooks, loading, error, refresh, reload, archive, remove, addToList } = useNotebooks();
 
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => notebooksApi.upload(file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notebooks'] }),
-  })
+  const [addOpen, setAddOpen] = useState(false);
+  const [preview, setPreview] = useState<Notebook | null>(null);
+  const [attaching, setAttaching] = useState<Notebook | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const githubMutation = useMutation({
-    mutationFn: (url: string) => notebooksApi.importFromGitHub(url),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['notebooks'] }); setGithubUrl(''); setShowGithub(false) },
-  })
+  const filtered = notebooks
+    .filter((nb) => statusFilter === "all" || nb.status === statusFilter)
+    .filter((nb) =>
+      !search ||
+      nb.title.toLowerCase().includes(search.toLowerCase()) ||
+      nb.description.toLowerCase().includes(search.toLowerCase()),
+    );
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-black">Jupyter Notebooks</h1>
-        <div className="flex gap-2">
-          <button onClick={() => setShowGithub(v => !v)} className="btn-ghost flex items-center gap-2">
-            <Github className="w-4 h-4" /> Import from GitHub
-          </button>
-          <button onClick={() => inputRef.current?.click()} className="btn-primary flex items-center gap-2">
-            <Upload className="w-4 h-4" /> Upload .ipynb
-          </button>
-        </div>
-        <input ref={inputRef} type="file" accept=".ipynb" className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) uploadMutation.mutate(f) }} />
+        <h1 className="text-2xl font-black">Notebooks</h1>
+        <button onClick={() => setAddOpen(true)} className="btn-primary flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Import Notebook
+        </button>
       </div>
 
-      {showGithub && (
-        <div className="glass-card p-5 flex flex-col gap-3">
-          <label className="form-label">GitHub Notebook URL</label>
-          <p className="text-sm text-muted-foreground -mt-2">
-            Paste a GitHub file URL (e.g. <code className="bg-muted px-1 rounded text-xs">https://github.com/user/repo/blob/main/notebook.ipynb</code>) or a raw URL.
-          </p>
-          <input value={githubUrl} onChange={e => setGithubUrl(e.target.value)}
-            className="input-field" placeholder="https://github.com/..." />
-          <div className="flex gap-3">
-            <button onClick={() => githubMutation.mutate(githubUrl)} disabled={!githubUrl || githubMutation.isPending} className="btn-primary">
-              {githubMutation.isPending ? 'Importing…' : 'Import'}
-            </button>
-            <button onClick={() => setShowGithub(false)} className="btn-ghost">Cancel</button>
-          </div>
-          {githubMutation.isError && <p className="text-sm text-destructive font-semibold">Import failed. Check the URL and try again.</p>}
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            className="input-field pl-10"
+            placeholder="Search notebooks…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          className="input-field w-40"
+        >
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="glass-card p-4 border-destructive/40 text-destructive text-sm font-semibold">
+          {error}
         </div>
       )}
 
-      {isLoading ? (
-        <div className="flex flex-col gap-3">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+      {/* Grid */}
+      {loading ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="glass-card p-16 text-center flex flex-col items-center gap-3">
+          <BookOpen className="w-10 h-10 text-primary/25" />
+          <p className="font-bold text-base">
+            {notebooks.length === 0 ? "No notebooks yet" : "No results"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {notebooks.length === 0
+              ? "Import a Jupyter notebook from GitHub or upload a local .ipynb file."
+              : "Try a different search or filter."}
+          </p>
+          {notebooks.length === 0 && (
+            <button onClick={() => setAddOpen(true)} className="btn-primary mt-2 flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Import your first notebook
+            </button>
+          )}
+        </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {(notebooks as { id: string; name: string; uploadedAt: string }[]).map(nb => (
-            <div key={nb.id} className="glass-card p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-                <BookOpen className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold">{nb.name}</p>
-                <p className="text-xs text-muted-foreground">{new Date(nb.uploadedAt).toLocaleDateString()}</p>
-              </div>
-            </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((nb) => (
+            <NotebookCard
+              key={nb.id}
+              notebook={nb}
+              onReload={reload}
+              onArchive={archive}
+              onDelete={remove}
+              onPreview={setPreview}
+              onAttach={setAttaching}
+            />
           ))}
-          {(notebooks as unknown[]).length === 0 && <p className="text-muted-foreground text-sm">No notebooks yet.</p>}
         </div>
       )}
+
+      <AddNotebookDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={(nb) => { addToList(nb); setPreview(nb); }}
+      />
+      <AttachNotebookDialog
+        notebook={attaching}
+        open={!!attaching}
+        onClose={() => setAttaching(null)}
+        onAttached={(_nbId, _pageId) => { refresh(); setAttaching(null); }}
+      />
+      <NotebookPreviewSheet
+        notebook={preview}
+        open={!!preview}
+        onClose={() => setPreview(null)}
+      />
     </div>
-  )
+  );
 }

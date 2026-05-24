@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"io"
+	"kumbi/internal/config"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kumbi/backend/internal/config"
 )
 
 type NotebooksHandler struct {
@@ -35,7 +35,8 @@ func (h *NotebooksHandler) Upload(c *gin.Context) {
 		return
 	}
 	var id string
-	err = h.db.QueryRow(c,
+	err = h.db.QueryRow(
+		c,
 		`INSERT INTO notebooks (name, path) VALUES ($1,$2) RETURNING id`,
 		file.Filename, fmt.Sprintf("/storage/notebooks/%s", name),
 	).Scan(&id)
@@ -91,7 +92,8 @@ func (h *NotebooksHandler) ImportFromGitHub(c *gin.Context) {
 	}
 
 	var id string
-	err = h.db.QueryRow(c,
+	err = h.db.QueryRow(
+		c,
 		`INSERT INTO notebooks (name, path) VALUES ($1,$2) RETURNING id`,
 		origName, fmt.Sprintf("/storage/notebooks/%s", name),
 	).Scan(&id)

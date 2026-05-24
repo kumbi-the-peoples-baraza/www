@@ -72,10 +72,17 @@ CREATE TABLE IF NOT EXISTS form_submissions (
 );
 
 CREATE TABLE IF NOT EXISTS notebooks (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name        TEXT NOT NULL,
-    path        TEXT NOT NULL,
-    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    source_type TEXT NOT NULL CHECK (source_type IN ('github_url','local_upload')),
+    source_url  TEXT NOT NULL DEFAULT '',
+    cells_json  JSONB NOT NULL DEFAULT '[]',
+    kernel      TEXT NOT NULL DEFAULT '',
+    language    TEXT NOT NULL DEFAULT '',
+    status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived','deleted')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS appearance (
@@ -160,7 +167,8 @@ INSERT INTO site_config (id, data) VALUES ('default', $site_config_seed${
     "projects": { "heroImage": "https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop" },
     "blog":     { "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop" },
     "volunteer":{ "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop" },
-    "trace":    { "heroImage": "https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop" }
+    "trace":    { "heroImage": "https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop" },
+    "vote":     { "heroImage": "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=1400&q=80&auto=format&fit=crop" }
   }
 }$site_config_seed$) ON CONFLICT (id) DO NOTHING;
 
@@ -212,6 +220,9 @@ INSERT INTO pages (slug, title, status, display_mode, "order") VALUES
     ('contact',  'Contact Us', 'published', 'full', 6),
     ('volunteer','Volunteer',  'published', 'full', 7)
 ON CONFLICT (slug) DO NOTHING;
+
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS notebook_id UUID REFERENCES notebooks(id) ON DELETE SET NULL;
+ALTER TABLE notebooks ADD COLUMN IF NOT EXISTS readme TEXT NOT NULL DEFAULT '';
 `
 
 func Migrate(pool *pgxpool.Pool) error {

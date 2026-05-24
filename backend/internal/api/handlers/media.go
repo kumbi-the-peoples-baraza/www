@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"fmt"
+	"kumbi/internal/config"
 	"net/http"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kumbi/backend/internal/config"
 )
 
 type MediaHandler struct {
@@ -35,7 +35,8 @@ func (h *MediaHandler) Upload(c *gin.Context) {
 	}
 	url := fmt.Sprintf("/storage/%s", name)
 	var id string
-	err = h.db.QueryRow(c,
+	err = h.db.QueryRow(
+		c,
 		`INSERT INTO media_files (name, url, mime_type, size) VALUES ($1,$2,$3,$4) RETURNING id`,
 		file.Filename, url, file.Header.Get("Content-Type"), file.Size,
 	).Scan(&id)
@@ -76,7 +77,9 @@ func (h *MediaHandler) List(c *gin.Context) {
 
 func (h *MediaHandler) SetGallery(c *gin.Context) {
 	id := c.Param("id")
-	var req struct{ Published bool `json:"published"` }
+	var req struct {
+		Published bool `json:"published"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

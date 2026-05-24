@@ -12,7 +12,7 @@ type PagesHandler struct{ db *pgxpool.Pool }
 func NewPagesHandler(db *pgxpool.Pool) *PagesHandler { return &PagesHandler{db: db} }
 
 func (h *PagesHandler) List(c *gin.Context) {
-	rows, err := h.db.Query(c, `SELECT id, slug, title, description, status, display_mode, "order", metadata, created_at, updated_at FROM pages ORDER BY "order"`)
+	rows, err := h.db.Query(c, `SELECT id, slug, title, description, status, display_mode, "order", metadata, created_at, updated_at, notebook_id FROM pages ORDER BY "order"`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -21,17 +21,20 @@ func (h *PagesHandler) List(c *gin.Context) {
 
 	var pages []gin.H
 	for rows.Next() {
-		var id, slug, title, desc, status, displayMode string
+		var id, slug, title, status, displayMode string
+		var description *string
 		var order int
-		var metadata interface{}
-		var createdAt, updatedAt interface{}
-		if err := rows.Scan(&id, &slug, &title, &desc, &status, &displayMode, &order, &metadata, &createdAt, &updatedAt); err != nil {
+		var metadata, createdAt, updatedAt interface{}
+		var notebookID *string
+		if err := rows.Scan(&id, &slug, &title, &description, &status, &displayMode, &order, &metadata, &createdAt, &updatedAt, &notebookID); err != nil {
 			continue
 		}
 		pages = append(pages, gin.H{
-			"id": id, "slug": slug, "title": title, "description": desc,
-			"status": status, "displayMode": displayMode, "order": order,
+			"id": id, "slug": slug, "title": title,
+			"description": description, "status": status,
+			"displayMode": displayMode, "order": order,
 			"metadata": metadata, "createdAt": createdAt, "updatedAt": updatedAt,
+			"notebookId": notebookID,
 		})
 	}
 	if pages == nil {

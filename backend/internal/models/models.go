@@ -1,9 +1,24 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
+)
+
+type (
+	NotebookStatus string
+	NotebookSource string
+)
+
+const (
+	StatusActive   NotebookStatus = "active"
+	StatusArchived NotebookStatus = "archived"
+	StatusDeleted  NotebookStatus = "deleted"
+
+	SourceGitHub NotebookSource = "github_url"
+	SourceUpload NotebookSource = "local_upload"
 )
 
 type User struct {
@@ -27,7 +42,10 @@ type Page struct {
 	Order       int                    `json:"order" db:"order"`
 	Metadata    map[string]interface{} `json:"metadata" db:"metadata"`
 	CreatedAt   time.Time              `json:"createdAt" db:"created_at"`
-	UpdatedAt   time.Time              `json:"updatedAt" db:"updated_at"`
+	UpdatedAt   time.Time              `json:"updatedAt,omitempty" db:"updated_at"`
+	// For pages with notebooks attached
+	NotebookID *uuid.UUID `json:"notebook_id,omitempty" db:"notebook_id"`
+	Notebook   *Notebook  `json:"notebook,omitempty" db:"-"`
 }
 
 type ContentBlock struct {
@@ -58,13 +76,6 @@ type FormSubmission struct {
 	CreatedAt time.Time              `json:"createdAt" db:"created_at"`
 }
 
-type Notebook struct {
-	ID         uuid.UUID `json:"id" db:"id"`
-	Name       string    `json:"name" db:"name"`
-	Path       string    `json:"path" db:"path"`
-	UploadedAt time.Time `json:"uploadedAt" db:"uploaded_at"`
-}
-
 type Appearance struct {
 	ID              uuid.UUID `json:"id" db:"id"`
 	PrimaryColor    string    `json:"primaryColor" db:"primary_color"`
@@ -76,4 +87,45 @@ type Appearance struct {
 	DarkMode        bool      `json:"darkMode" db:"dark_mode"`
 	FontFamily      string    `json:"fontFamily" db:"font_family"`
 	UpdatedAt       time.Time `json:"updatedAt" db:"updated_at"`
+}
+
+type Notebook struct {
+	ID          uuid.UUID       `json:"id"          db:"id"`
+	Title       string          `json:"title"       db:"title"`
+	Description string          `json:"description" db:"description"`
+	SourceType  string          `json:"sourceType"  db:"source_type"`
+	SourceURL   string          `json:"sourceUrl"   db:"source_url"`
+	CellsJSON   json.RawMessage `json:"cells"       db:"cells_json"`
+	Readme      string          `json:"readme"      db:"readme"`
+	Kernel      string          `json:"kernel"      db:"kernel"`
+	Language    string          `json:"language"    db:"language"`
+	Status      string          `json:"status"      db:"status"`
+	CreatedAt   time.Time       `json:"createdAt"   db:"created_at"`
+	UpdatedAt   time.Time       `json:"updatedAt"   db:"updated_at"`
+}
+
+type CellDTO struct {
+	ID       string          `json:"id"`
+	Type     string          `json:"type"` // "code" | "markdown" | "raw"
+	Source   string          `json:"source"`
+	Outputs  []OutputDTO     `json:"outputs"`
+	Metadata json.RawMessage `json:"metadata,omitempty"`
+}
+
+type OutputDTO struct {
+	OutputType string          `json:"outputType"`
+	Data       json.RawMessage `json:"data,omitempty"`
+	Text       []string        `json:"text,omitempty"`
+	MimeBundle map[string]any  `json:"mimeBundle,omitempty"`
+}
+
+type CreateNotebookRequest struct {
+	Title       string `json:"title"      binding:"required"`
+	Description string `json:"description"`
+	SourceType  string `json:"sourceType" binding:"required,oneof=github_url local_upload"`
+	SourceURL   string `json:"sourceUrl"`
+}
+
+type AttachNotebookRequest struct {
+	NotebookID uuid.UUID `json:"notebookId" binding:"required"`
 }

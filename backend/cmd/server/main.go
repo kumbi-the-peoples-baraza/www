@@ -2,16 +2,15 @@ package main
 
 import (
 	"context"
+	"kumbi/internal/api/routes"
+	"kumbi/internal/config"
+	"kumbi/internal/db"
+	"kumbi/pkg/logger"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/kumbi/backend/internal/api/routes"
-	"github.com/kumbi/backend/internal/config"
-	"github.com/kumbi/backend/internal/db"
-	"github.com/kumbi/backend/pkg/logger"
 )
 
 func main() {
@@ -32,6 +31,7 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to run migrations")
 	}
 
+	log.Info().Msg("server initializing")
 	router := routes.Setup(cfg, pool, log)
 
 	srv := &http.Server{
@@ -58,5 +58,4 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Error().Err(err).Msg("server shutdown error")
 	}
-	log.Info().Msg("server stopped")
 }

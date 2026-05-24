@@ -5,7 +5,7 @@ metadata:
   name: kumbi
   namespace: kumbi
 spec:
-  ingressClassName: traefik   # dev/test only — prod overlay uses nginx
+  ingressClassName: traefik  # dev/test only — prod overlay uses nginx
   rules:
     - http:
         paths:

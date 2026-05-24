@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"kumbi/internal/config"
 	"net/http"
 	"net/smtp"
-
-	"github.com/kumbi/backend/internal/config"
 )
 
 type Notifier struct{ cfg *config.Config }

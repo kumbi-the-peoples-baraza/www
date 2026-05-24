@@ -1,7 +1,11 @@
 import { motion } from 'framer-motion'
-import { Search, BarChart3, Users, AlertTriangle } from 'lucide-react'
+import { Search, BarChart3, Users, AlertTriangle, Loader2 } from 'lucide-react'
 import PageHero from '@/components/ui/PageHero'
 import { useConfig } from '@/hooks/useConfig'
+import { useEffect, useState } from 'react'
+import { notebooksApi } from '@notebooks/api/notebooksApi'
+import { NotebookRenderer } from '@notebooks/components/NotebookRenderer'
+import type { Page } from '@/types'
 
 const features = [
   { icon: Search,        title: 'Crowd-sourced Reports',   desc: 'Anyone can submit a missing persons report with photos, last known location, and circumstances.' },
@@ -12,6 +16,17 @@ const features = [
 
 export default function TraceData() {
   const cfg = useConfig()
+  const [page, setPage] = useState<Page | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Slug for this page is 'trace'
+    notebooksApi.getPageWithNotebook('trace')
+      .then(setPage)
+      .catch(() => {}) // Silently fail, just don't show notebook
+      .finally(() => setLoading(false))
+  }, [])
+
   return (
     <>
       <PageHero
@@ -36,9 +51,21 @@ export default function TraceData() {
             </motion.div>
           ))}
         </div>
-        <div className="glass-card p-8 text-center">
-          <p className="text-muted-foreground text-base">Jupyter notebook data visualisations and live data will appear here once connected to the CMS.</p>
-        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/30" />
+          </div>
+        ) : page?.notebook ? (
+          <div className="space-y-8">
+            <div className="flex items-center gap-4">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground/50 whitespace-nowrap">Live Analysis Data</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+            <NotebookRenderer notebook={page.notebook} />
+          </div>
+        ) : null}
       </div>
     </>
   )

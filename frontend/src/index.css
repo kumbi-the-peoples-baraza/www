@@ -23,6 +23,10 @@
     --input: 0 0% 100%;               /* pure white — always opaque */
     --ring: 232 85% 32%;
     --radius: 0.75rem;
+    --card: 207 80% 88%;
+    --card-foreground: 232 90% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 232 90% 12%;
     --nav-bg: 207 80% 82%;            /* sky blue — matches page background */
     --nav-fg: 232 90% 12%;
     --nav-border: 207 55% 72%;
@@ -46,6 +50,10 @@
     --border: 38 30% 24%;
     --input: 38 20% 16%;
     --ring: 42 95% 58%;
+    --card: 38 25% 15%;
+    --card-foreground: 42 90% 88%;
+    --popover: 38 25% 14%;
+    --popover-foreground: 42 90% 88%;
     --nav-bg: 38 30% 10%;
     --nav-fg: 42 90% 88%;
     --nav-border: 38 30% 20%;
@@ -53,25 +61,45 @@
 
   /* ── Dark — true black, electric blue accents ── */
   .dark {
-    --background: 0 0% 4%;            /* near-black */
+    --background: 0 0% 6%;
     --background-low: 0 0% 2%;
-    --foreground: 210 100% 97%;       /* bright white-blue */
-    --primary: 217 100% 65%;          /* electric blue */
-    --primary-foreground: 0 0% 0%;
-    --secondary: 222 80% 55%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 220 15% 12%;
-    --muted-foreground: 210 60% 72%;
-    --accent: 217 100% 65%;
-    --accent-foreground: 0 0% 0%;
-    --destructive: 0 72% 55%;
+    --foreground: 210 100% 97%;
+    --primary: 222 85% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 30% 22%;
+    --secondary-foreground: 210 100% 97%;
+    --muted: 220 20% 14%;
+    --muted-foreground: 220 15% 60%;
+    --accent: 222 85% 62%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 220 20% 18%;
-    --input: 220 15% 10%;
-    --ring: 217 100% 65%;
+    --input: 220 20% 14%;
+    --ring: 222 85% 62%;
+    --radius: 0.75rem;
+    --card: 220 20% 10%;
+    --card-foreground: 210 100% 97%;
+    --popover: 220 20% 10%;
+    --popover-foreground: 210 100% 97%;
     --nav-bg: 0 0% 6%;
     --nav-fg: 210 100% 97%;
     --nav-border: 220 20% 16%;
+  }
+
+  .theme {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
@@ -136,6 +164,12 @@
 }
 
 @import './components/ui/components.css';
+
+@import "tw-animate-css";
+
+@import "shadcn/tailwind.css";
+
+@import "@fontsource-variable/geist";
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { @apply bg-transparent; }
