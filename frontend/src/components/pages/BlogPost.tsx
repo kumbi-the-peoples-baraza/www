@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
-import { useEffect } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, Expand } from 'lucide-react'
 import { blogApi, analyticsApi } from '@/api/client'
-import type { BlogPost } from '@/types'
+import ImageGallery from '@/components/ui/ImageGallery'
+import type { BlogPost, GalleryImage } from '@/types'
 
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>()
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryIndex, setGalleryIndex] = useState(0)
 
   const { data: post, isLoading, isError } = useQuery({
     queryKey: ['blog-post', slug],
@@ -33,6 +36,8 @@ export default function BlogPostPage() {
       <Link to="/blog" className="text-primary font-semibold">← Back to Blog</Link>
     </div>
   )
+
+  const gallery: GalleryImage[] = post.galleryImages || []
 
   return (
     <article className="pt-24 pb-20 px-[2%] sm:px-[4%] lg:px-[6%] max-w-4xl mx-auto">
@@ -62,6 +67,32 @@ export default function BlogPostPage() {
       )}
 
       <div className="rich-content text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: post.body }} />
+
+      {/* Gallery */}
+      {gallery.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-xl font-black mb-4">Gallery</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {gallery.map((img, i) => (
+              <button
+                key={i}
+                onClick={() => { setGalleryIndex(i); setGalleryOpen(true) }}
+                className="aspect-square rounded-xl overflow-hidden bg-muted group relative"
+              >
+                <img src={img.url} alt={img.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <Expand className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Gallery overlay */}
+      {galleryOpen && (
+        <ImageGallery images={gallery} initialIndex={galleryIndex} onClose={() => setGalleryOpen(false)} />
+      )}
     </article>
   )
 }

@@ -5,20 +5,45 @@ export interface ProjectItem {
   id: string; title: string; tag: string; description: string; image: string; link: string
 }
 
+export interface ContentCard {
+  id: string
+  title: string
+  description: string
+}
+
+export interface WatermarkConfig {
+  enabled: boolean
+  text: string
+  font: string
+  size: number
+  weight: string
+  style: string
+  color: string
+  opacity: number
+  position: string
+}
+
 export interface SiteConfig {
   nav: { brand: string; tagline: string }
   hero: { heading: string; subheading: string; image: string; ctaPrimary: string; ctaSecondary: string }
   projects: { heading: string; subheading: string; tagline: string; items: ProjectItem[]; backgroundImage: string }
   volunteer: { heading: string; subheading: string; cta: string; backgroundImage: string }
-  footer: { about: string; address: string; city: string; email: string; phone: string; copyright: string }
+  footer: { about: string; address: string; city: string; email: string; phone: string; copyright: string; twitter: string; instagram: string; facebook: string }
   pages: {
-    about:    { heroImage: string; story: string }
-    projects: { heroImage: string }
-    blog:     { heroImage: string }
-    volunteer:{ heroImage: string }
-    trace:    { heroImage: string }
-    vote:     { heroImage: string }
+    about:    { heading: string; subheading: string; heroImage: string; content: string; heroTag: string; values: ContentCard[] }
+    projects: { heading: string; subheading: string; heroImage: string; content: string; heroTag: string }
+    blog:     { heading: string; subheading: string; heroImage: string; content: string; heroTag: string }
+    volunteer:{ heading: string; subheading: string; heroImage: string; content: string; heroTag: string; roles: ContentCard[] }
+    trace:    { heading: string; subheading: string; heroImage: string; content: string; heroTag: string; features: ContentCard[] }
+    vote:     { heading: string; subheading: string; heroImage: string; content: string; heroTag: string; features: ContentCard[] }
   }
+  watermark?: WatermarkConfig
+}
+
+const WM_DEFAULTS: WatermarkConfig = {
+  enabled: false, text: '© Kumbi',
+  font: 'Inter, sans-serif', size: 24, weight: 'bold', style: 'normal',
+  color: '#ffffff', opacity: 0.6, position: 'bottom-right',
 }
 
 export const DEFAULTS: SiteConfig = {
@@ -26,45 +51,63 @@ export const DEFAULTS: SiteConfig = {
   hero: {
     heading: 'Building a Better Community Together',
     subheading: 'Kumbi drives meaningful change across Kenya through data, democracy, and dedicated social work.',
-    image: 'https://images.unsplash.com/photo-1489392191049-fc10c97e64b6?w=1920&q=90&auto=format&fit=crop',
-    ctaPrimary: 'Explore Projects', ctaSecondary: 'Learn More',
+    image: '', ctaPrimary: 'Explore Projects', ctaSecondary: 'Learn More',
   },
   projects: {
     heading: 'Our Projects',
     subheading: 'Three pillars of community transformation driving real, measurable impact across Kenya.',
     tagline: 'Empowering communities — one project at a time',
-    backgroundImage: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80&auto=format&fit=crop',
-    items: [
-      { id: 'trace', title: 'KumbiTrace', tag: 'Missing Persons · Data', link: '/projects/trace',
-        description: 'Born from the 2024 Nairobi protests, KumbiTrace is a crowd-sourced platform for tracking enforced disappearances.',
-        image: 'https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=900&q=80&auto=format&fit=crop' },
-      { id: 'vote', title: 'KumbiVote', tag: 'Blockchain · Elections', link: '/projects/vote',
-        description: 'A bulletproof blockchain-based distributed elections management platform built for Africa.',
-        image: 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=900&q=80&auto=format&fit=crop' },
-      { id: 'social', title: 'Social Work', tag: 'Community · Volunteers', link: '/blog',
-        description: 'Connecting volunteers with communities in need through coordinated social programmes across Kenya.',
-        image: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=900&q=80&auto=format&fit=crop' },
+    backgroundImage: '', items: [
+      { id: 'trace', title: 'KumbiTrace', tag: 'Missing Persons · Data', link: '/projects/trace', image: '',
+        description: 'Born from the 2024 Nairobi protests, KumbiTrace is a crowd-sourced platform for tracking enforced disappearances.' },
+      { id: 'vote', title: 'KumbiVote', tag: 'Blockchain · Elections', link: '/projects/vote', image: '',
+        description: 'A bulletproof blockchain-based distributed elections management platform built for Africa.' },
+      { id: 'social', title: 'Social Work', tag: 'Community · Volunteers', link: '/blog', image: '',
+        description: 'Connecting volunteers with communities in need through coordinated social programmes across Kenya.' },
     ],
   },
   volunteer: {
     heading: 'Ready to Make a Difference?',
     subheading: 'Join hundreds of volunteers already working with Kumbi to transform communities across Nairobi and Kenya.',
-    cta: 'Volunteer with Kumbi',
-    backgroundImage: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1600&q=80&auto=format&fit=crop',
+    cta: 'Volunteer with Kumbi', backgroundImage: '',
   },
   footer: {
     about: 'Driving meaningful change across Kenya through data, democracy, and dedicated social work.',
     address: 'Ngong Road, Kilimani', city: 'Nairobi, Kenya',
     email: 'hello@kumbi.org', phone: '+254 700 000 000',
     copyright: '© 2026 The People\'s Baraza. All Rights Reserved.',
+    twitter: '', instagram: '', facebook: '',
   },
   pages: {
-    about:    { heroImage: 'https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop', story: '' },
-    projects: { heroImage: 'https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop' },
-    blog:     { heroImage: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop' },
-    volunteer:{ heroImage: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop' },
-    trace:    { heroImage: 'https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop' },
-    vote:     { heroImage: 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=1400&q=80&auto=format&fit=crop' },
+    about:    { heading: 'About Kumbi', subheading: 'Our story, mission, and the people behind the movement.', heroImage: '', content: '', heroTag: 'Who We Are',
+      values: [
+        { id: 'community-first', title: 'Community First', description: 'Every decision we make is guided by the needs and voices of the communities we serve.' },
+        { id: 'data-driven', title: 'Data-driven', description: 'We use evidence and data to design programmes that create measurable, lasting impact.' },
+        { id: 'transparency', title: 'Transparency', description: 'We operate openly — our data, our methods, and our results are available to all.' },
+      ] },
+    projects: { heading: 'Our Projects', subheading: 'Explore the initiatives driving change.', heroImage: '', content: '', heroTag: 'Kumbi Initiatives' },
+    blog:     { heading: 'Social Work Blog', subheading: 'Stories, insights, and updates from our work across Nairobi and Kenya.', heroImage: '', content: '', heroTag: 'Community · Impact' },
+    volunteer:{ heading: 'Volunteer with Kumbi', subheading: 'Join hundreds of changemakers already working to transform communities across Kenya.', heroImage: '', content: '', heroTag: 'Get Involved',
+      roles: [
+        { id: 'technology', title: 'Technology', description: 'Developers, designers, data scientists — help us build and improve our platforms.' },
+        { id: 'outreach', title: 'Outreach', description: 'Community organisers and communicators who can spread the word and mobilise people.' },
+        { id: 'social-work', title: 'Social Work', description: 'Trained social workers and counsellors supporting families and communities in need.' },
+        { id: 'legal-support', title: 'Legal Support', description: 'Lawyers and paralegals helping families navigate the legal system.' },
+      ] },
+    trace:    { heading: 'KumbiTrace', subheading: 'A crowd-sourced missing persons tracking and data analysis platform — born from the 2024 Nairobi protests.', heroImage: '', content: '', heroTag: 'Missing Persons · Data',
+      features: [
+        { id: 'crowd-reports', title: 'Crowd-sourced Reports', description: 'Anyone can submit a missing persons report with photos, last known location, and circumstances.' },
+        { id: 'data-analysis', title: 'Data Analysis', description: 'Pattern recognition and geospatial analysis to identify clusters and trends in disappearances.' },
+        { id: 'community-verification', title: 'Community Verification', description: 'Community members verify and corroborate reports, building a trusted, tamper-resistant dataset.' },
+        { id: 'real-time-alerts', title: 'Real-time Alerts', description: 'Instant notifications to families, lawyers, and human rights organisations when new data emerges.' },
+      ] },
+    vote:     { heading: 'KumbiVote', subheading: 'A bulletproof, first-of-its-kind blockchain-based distributed elections management and polling platform — low latency, tamper-proof, and built for Africa.', heroImage: '', content: '', heroTag: 'Blockchain · Elections',
+      features: [
+        { id: 'tamper-proof', title: 'Tamper-proof', description: 'Every vote is recorded on a distributed blockchain — immutable, verifiable, and transparent.' },
+        { id: 'low-latency', title: 'Low Latency', description: 'Results are tallied in real time with sub-second confirmation, even at national scale.' },
+        { id: 'built-for-africa', title: 'Built for Africa', description: 'Designed for low-bandwidth environments, feature phones, and offline-first operation.' },
+        { id: 'accessible', title: 'Accessible to All', description: 'Multi-language, USSD-compatible, and accessible to voters without smartphones.' },
+      ] },
   },
 }
 
@@ -83,12 +126,13 @@ export function useConfig(): SiteConfig {
     volunteer: { ...DEFAULTS.volunteer, ...(data.volunteer || {}) },
     footer:    { ...DEFAULTS.footer,    ...(data.footer    || {}) },
     pages: {
-      about:    { ...DEFAULTS.pages.about,    ...(data.pages?.about    || {}) },
+      about:    { ...DEFAULTS.pages.about,    ...(data.pages?.about    || {}), values:   data.pages?.about?.values    || DEFAULTS.pages.about.values },
       projects: { ...DEFAULTS.pages.projects, ...(data.pages?.projects || {}) },
       blog:     { ...DEFAULTS.pages.blog,     ...(data.pages?.blog     || {}) },
-      volunteer:{ ...DEFAULTS.pages.volunteer,...(data.pages?.volunteer|| {}) },
-      trace:    { ...DEFAULTS.pages.trace,    ...(data.pages?.trace    || {}) },
-      vote:     { ...DEFAULTS.pages.vote,     ...(data.pages?.vote     || {}) },
+      volunteer:{ ...DEFAULTS.pages.volunteer,...(data.pages?.volunteer|| {}), roles:    data.pages?.volunteer?.roles    || DEFAULTS.pages.volunteer.roles },
+      trace:    { ...DEFAULTS.pages.trace,    ...(data.pages?.trace    || {}), features: data.pages?.trace?.features   || DEFAULTS.pages.trace.features },
+      vote:     { ...DEFAULTS.pages.vote,     ...(data.pages?.vote     || {}), features: data.pages?.vote?.features    || DEFAULTS.pages.vote.features },
     },
+    watermark: { ...WM_DEFAULTS, ...(data.watermark || {}) },
   }
 }

@@ -10,34 +10,36 @@ import (
 )
 
 type Config struct {
-	Port        string
-	DatabaseURL string
-	JWTSecret   string
-	SMTPHost    string
-	SMTPPort    string
-	SMTPUser    string
-	SMTPPass    string
-	WhatsAppURL string
-	StoragePath string
-	Env         string
-	AllowOrigin string
+	Port          string
+	DatabaseURL   string
+	JWTSecret     string
+	CaptchaSecret string
+	SMTPHost      string
+	SMTPPort      string
+	SMTPUser      string
+	SMTPPass      string
+	WhatsAppURL   string
+	StoragePath   string
+	Env           string
+	AllowOrigin   string
 }
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		Port:        getEnv("PORT", "8080"),
-		DatabaseURL: resolveDSN(),
-		JWTSecret:   mustEnv("JWT_SECRET"),
-		SMTPHost:    getEnv("SMTP_HOST", ""),
-		SMTPPort:    getEnv("SMTP_PORT", "587"),
-		SMTPUser:    getEnv("SMTP_USER", ""),
-		SMTPPass:    getEnv("SMTP_PASS", ""),
-		WhatsAppURL: getEnv("WHATSAPP_WEBHOOK_URL", ""),
-		StoragePath: getEnv("STORAGE_PATH", "./app/storage"),
-		Env:         getEnv("ENV", "development"),
-		AllowOrigin: getEnv("ALLOW_ORIGIN", "http://localhost:5173"),
+		Port:          getEnv("PORT", "8080"),
+		DatabaseURL:   resolveDSN(),
+		JWTSecret:     mustEnv("JWT_SECRET"),
+		CaptchaSecret: getEnv("CAPTCHA_SECRET", "change-me-captcha-secret"),
+		SMTPHost:      getEnv("SMTP_HOST", ""),
+		SMTPPort:      getEnv("SMTP_PORT", "587"),
+		SMTPUser:      getEnv("SMTP_USER", ""),
+		SMTPPass:      getEnv("SMTP_PASS", ""),
+		WhatsAppURL:   getEnv("WHATSAPP_WEBHOOK_URL", ""),
+		StoragePath:   getEnv("STORAGE_PATH", "./app/storage"),
+		Env:           getEnv("ENV", "development"),
+		AllowOrigin:   getEnv("ALLOW_ORIGIN", "http://localhost:5173"),
 	}
 
 	if err := os.MkdirAll(cfg.StoragePath, 0755); err != nil {

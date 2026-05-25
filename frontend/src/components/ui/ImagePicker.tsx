@@ -194,7 +194,7 @@ export default function ImagePicker({ value, onChange, label = 'Image' }: Props)
   })
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => mediaApi.upload(file),
+    mutationFn: (file: File) => mediaApi.upload(file, {}),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['media'] })
       onChange(res.data.url)
@@ -262,11 +262,21 @@ export default function ImagePicker({ value, onChange, label = 'Image' }: Props)
         <AnimatePresence>
           {open && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2 max-h-64 overflow-y-auto">
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-2 max-h-72 overflow-y-auto">
                 {images.map(f => (
                   <button key={f.id} onClick={() => { onChange(f.url); setOpen(false) }}
-                    className={`aspect-square rounded-lg overflow-hidden border-2 transition-all hover:border-primary ${url === f.url ? 'border-primary' : 'border-transparent'}`}>
-                    <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+                    className={`group relative aspect-square rounded-lg overflow-hidden transition-all ${url === f.url ? 'ring-2 ring-primary' : ''}`}>
+                    <img src={f.url} alt={f.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    {/* Selected indicator */}
+                    {url === f.url && (
+                      <div className="absolute top-1 right-1 z-10 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-md">
+                        ✓
+                      </div>
+                    )}
+                    {/* Hover overlay — Netflix style */}
+                    <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-2">
+                      <p className="text-white text-[11px] font-bold truncate leading-tight">{f.name}</p>
+                    </div>
                   </button>
                 ))}
                 {images.length === 0 && (

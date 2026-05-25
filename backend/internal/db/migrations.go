@@ -140,7 +140,7 @@ INSERT INTO site_config (id, data) VALUES ('default', $site_config_seed${
       { "id": "trace", "title": "KumbiTrace", "tag": "Missing Persons · Data", "link": "/projects/trace",
         "description": "Born from the 2024 Nairobi protests, KumbiTrace is a crowd-sourced platform for tracking enforced disappearances.",
         "image": "https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=900&q=80&auto=format&fit=crop" },
-      { "id": "vote", "title": "KumbiVote", "tag": "Blockchain · Elections", "link": "/projects",
+      { "id": "vote", "title": "KumbiVote", "tag": "Blockchain · Elections", "link": "/projects/vote",
         "description": "A bulletproof blockchain-based distributed elections management platform built for Africa.",
         "image": "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=900&q=80&auto=format&fit=crop" },
       { "id": "social", "title": "Social Work", "tag": "Community · Volunteers", "link": "/blog",
@@ -160,15 +160,41 @@ INSERT INTO site_config (id, data) VALUES ('default', $site_config_seed${
     "city": "Nairobi, Kenya",
     "email": "hello@kumbi.org",
     "phone": "+254 700 000 000",
-    "copyright": "© 2026 The People's Baraza. All Rights Reserved."
+    "copyright": "© 2026 The People's Baraza. All Rights Reserved.",
+    "twitter": "",
+    "instagram": "",
+    "facebook": ""
   },
   "pages": {
-    "about":    { "heroImage": "https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop", "story": "" },
-    "projects": { "heroImage": "https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop" },
-    "blog":     { "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop" },
-    "volunteer":{ "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop" },
-    "trace":    { "heroImage": "https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop" },
-    "vote":     { "heroImage": "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=1400&q=80&auto=format&fit=crop" }
+    "about":    { "heroImage": "https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop", "heading": "About Kumbi", "subheading": "Our story, mission, and the people behind the movement.", "content": "", "heroTag": "Who We Are",
+      "values": [
+        { "id": "community-first", "title": "Community First", "description": "Every decision we make is guided by the needs and voices of the communities we serve." },
+        { "id": "data-driven", "title": "Data-driven", "description": "We use evidence and data to design programmes that create measurable, lasting impact." },
+        { "id": "transparency", "title": "Transparency", "description": "We operate openly — our data, our methods, and our results are available to all." }
+      ] },
+    "projects": { "heroImage": "https://images.unsplash.com/photo-1611348586804-61bf6c080437?w=1400&q=80&auto=format&fit=crop", "heading": "Our Projects", "subheading": "Explore the initiatives driving change.", "content": "", "heroTag": "Kumbi Initiatives" },
+    "blog":     { "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop", "heading": "Social Work Blog", "subheading": "Stories, insights, and updates from our work across Nairobi and Kenya.", "content": "", "heroTag": "Community \u00b7 Impact" },
+    "volunteer":{ "heroImage": "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=1400&q=80&auto=format&fit=crop", "heading": "Volunteer with Kumbi", "subheading": "Join hundreds of changemakers already working to transform communities across Kenya.", "content": "", "heroTag": "Get Involved",
+      "roles": [
+        { "id": "technology", "title": "Technology", "description": "Developers, designers, data scientists \u2014 help us build and improve our platforms." },
+        { "id": "outreach", "title": "Outreach", "description": "Community organisers and communicators who can spread the word and mobilise people." },
+        { "id": "social-work", "title": "Social Work", "description": "Trained social workers and counsellors supporting families and communities in need." },
+        { "id": "legal-support", "title": "Legal Support", "description": "Lawyers and paralegals helping families navigate the legal system." }
+      ] },
+    "trace":    { "heroImage": "https://images.unsplash.com/photo-1591189863430-ab87e120f312?w=1400&q=80&auto=format&fit=crop", "heading": "KumbiTrace", "subheading": "A crowd-sourced missing persons tracking and data analysis platform \u2014 born from the 2024 Nairobi protests.", "content": "", "heroTag": "Missing Persons \u00b7 Data",
+      "features": [
+        { "id": "crowd-reports", "title": "Crowd-sourced Reports", "description": "Anyone can submit a missing persons report with photos, last known location, and circumstances." },
+        { "id": "data-analysis", "title": "Data Analysis", "description": "Pattern recognition and geospatial analysis to identify clusters and trends in disappearances." },
+        { "id": "community-verification", "title": "Community Verification", "description": "Community members verify and corroborate reports, building a trusted, tamper-resistant dataset." },
+        { "id": "real-time-alerts", "title": "Real-time Alerts", "description": "Instant notifications to families, lawyers, and human rights organisations when new data emerges." }
+      ] },
+    "vote":     { "heroImage": "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=1400&q=80&auto=format&fit=crop", "heading": "KumbiVote", "subheading": "A bulletproof, first-of-its-kind blockchain-based distributed elections management and polling platform \u2014 low latency, tamper-proof, and built for Africa.", "content": "", "heroTag": "Blockchain \u00b7 Elections",
+      "features": [
+        { "id": "tamper-proof", "title": "Tamper-proof", "description": "Every vote is recorded on a distributed blockchain \u2014 immutable, verifiable, and transparent." },
+        { "id": "low-latency", "title": "Low Latency", "description": "Results are tallied in real time with sub-second confirmation, even at national scale." },
+        { "id": "built-for-africa", "title": "Built for Africa", "description": "Designed for low-bandwidth environments, feature phones, and offline-first operation." },
+        { "id": "accessible", "title": "Accessible to All", "description": "Multi-language, USSD-compatible, and accessible to voters without smartphones." }
+      ] }
   }
 }$site_config_seed$) ON CONFLICT (id) DO NOTHING;
 
@@ -201,7 +227,19 @@ CREATE TABLE IF NOT EXISTS people (
 );
 
 -- ALTER TABLE additions (safe to re-run via IF NOT EXISTS / DO NOTHING)
-ALTER TABLE media_files ADD COLUMN IF NOT EXISTS gallery_published BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS caption TEXT NOT NULL DEFAULT '';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS thumbnail_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS webp_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS width INT NOT NULL DEFAULT 0;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS height INT NOT NULL DEFAULT 0;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS photographer TEXT NOT NULL DEFAULT '';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS date_taken TEXT NOT NULL DEFAULT '';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS uploader_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS exif JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS locked BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS views INT NOT NULL DEFAULT 0;
+ALTER TABLE media_files ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS gallery_images JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE blog_posts   ADD COLUMN IF NOT EXISTS cover_caption TEXT;
 
 -- Seed default appearance

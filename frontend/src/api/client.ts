@@ -57,13 +57,26 @@ export const formsApi = {
 
 // Media
 export const mediaApi = {
-  upload: (file: File) => {
+  upload: (file: File, data: { name?: string; caption?: string; photographer?: string; dateTaken?: string }, onProgress?: (pct: number) => void) => {
     const fd = new FormData()
     fd.append('file', file)
-    return api.post('/media', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    if (data.name) fd.append('name', data.name)
+    if (data.caption) fd.append('caption', data.caption)
+    if (data.photographer) fd.append('photographer', data.photographer)
+    if (data.dateTaken) fd.append('date_taken', data.dateTaken)
+    return api.post('/media', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => { if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100)) },
+    })
   },
-  list: () => api.get('/media'),
+  list: (params?: { search?: string; sort?: string; order?: string; page?: number; limit?: number }) =>
+    api.get('/media', { params }),
   delete: (id: string) => api.delete(`/media/${id}`),
+  get: (id: string) => api.get(`/media/${id}`),
+  updateCaption: (id: string, caption: string) => api.put(`/media/${id}/caption`, { caption }),
+  updateName: (id: string, name: string) => api.put(`/media/${id}/name`, { name }),
+  updateMetadata: (id: string, data: { name?: string; caption?: string; photographer?: string; dateTaken?: string }) =>
+    api.put(`/media/${id}/metadata`, data),
 }
 
 // Notebooks

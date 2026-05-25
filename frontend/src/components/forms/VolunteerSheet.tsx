@@ -6,8 +6,8 @@ import { CheckCircle2 } from 'lucide-react'
 import { useState } from 'react'
 import { useVolunteerStore } from '@/store/volunteerStore'
 import { formsApi } from '@/api/client'
-import RichTextarea from '@/components/ui/RichTextarea'
 import OverlayPanel from '@/components/ui/OverlayPanel'
+import CaptchaField from '@/components/ui/CaptchaField'
 
 const schema = z.object({
   firstName: z.string().min(1, 'Required'),
@@ -15,11 +15,11 @@ const schema = z.object({
   email: z.string().email('Invalid email'),
   phone: z.string().min(7, 'Invalid number'),
   skills: z.string().min(10, 'Please describe what you can do'),
-  _hp: z.string().max(0, 'Bot detected'), // honeypot
+  _hp: z.string().max(0, 'Bot detected'),
+  _captcha_token: z.string().min(1, 'Captcha required'),
+  _captcha_answer: z.string().min(1, 'Please answer the captcha'),
 })
 type FormData = z.infer<typeof schema>
-
-const W = '85%'
 
 export default function VolunteerSheet() {
   const { isOpen, close } = useVolunteerStore()
@@ -44,11 +44,11 @@ export default function VolunteerSheet() {
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit(d => mutation.mutate(d))} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', width: W, margin: '0 auto' }}>
-          {/* Honeypot */}
+        <form onSubmit={handleSubmit(d => mutation.mutate(d))} className="overlay-form">
           <input {...register('_hp')} type="text" tabIndex={-1} autoComplete="off"
             style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
-          {/* One field per row — no grid */}
+          <input type="hidden" {...register('_captcha_token')} />
+
           <Field label="First Name" error={errors.firstName?.message}>
             <input {...register('firstName')} className="input-field" placeholder="Jane" />
           </Field>
@@ -62,8 +62,13 @@ export default function VolunteerSheet() {
             <input {...register('phone')} type="tel" className="input-field" placeholder="+254 700 000 000" />
           </Field>
           <Field label="What can you do?" error={errors.skills?.message}>
-            <RichTextarea onChange={val => setValue('skills', val)} placeholder="Tell us about your skills, availability, and how you'd like to contribute 🌟" />
+            <textarea {...register('skills')} rows={5} className="input-field resize-none" placeholder="Tell us about your skills, availability, and how you'd like to contribute" />
           </Field>
+          <CaptchaField
+            setToken={t => setValue('_captcha_token', t)}
+            onAnswerChange={v => setValue('_captcha_answer', v)}
+            error={errors._captcha_answer?.message}
+          />
           <button type="submit" disabled={mutation.isPending} className="btn-primary" style={{ width: '100%' }}>
             {mutation.isPending ? 'Submitting…' : 'Register to Volunteer'}
           </button>
@@ -76,8 +81,8 @@ export default function VolunteerSheet() {
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-      <label className="form-label">{label}</label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+      <label className="form-label overlay-label">{label}</label>
       {children}
       {error && <p style={{ color: 'hsl(var(--destructive))', fontWeight: 600, fontSize: '0.9rem', marginTop: '0.25rem' }}>{error}</p>}
     </div>

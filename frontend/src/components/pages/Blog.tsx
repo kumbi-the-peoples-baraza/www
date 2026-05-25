@@ -4,9 +4,10 @@ import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { blogApi, galleryApi } from '@/api/client'
 import PageHero from '@/components/ui/PageHero'
+import ImageGallery from '@/components/ui/ImageGallery'
 import { useConfig } from '@/hooks/useConfig'
 import type { BlogPost } from '@/types'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Expand } from 'lucide-react'
 
 type Tab = 'recent' | 'popular' | 'all' | 'gallery'
 const PAGE_SIZE = 30
@@ -42,6 +43,8 @@ export default function Blog() {
   const cfg = useConfig()
   const [tab, setTab] = useState<Tab>('recent')
   const [page, setPage] = useState(0)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryIndex, setGalleryIndex] = useState(0)
 
   const { data: recent = [] } = useQuery({ queryKey: ['blog'], queryFn: () => blogApi.list().then(r => r.data) })
   const { data: popular = [] } = useQuery({ queryKey: ['blog-popular'], queryFn: () => blogApi.popular().then(r => r.data), enabled: tab === 'popular' })
@@ -60,8 +63,8 @@ export default function Blog() {
 
   return (
     <>
-      <PageHero title="Social Work Blog" subtitle="Stories, insights, and updates from our work across Nairobi and Kenya."
-        tag="Community · Impact" img={cfg.pages.blog.heroImage} />
+      <PageHero title={cfg.pages.blog.heading} subtitle={cfg.pages.blog.subheading}
+        tag={cfg.pages.blog.heroTag} img={cfg.pages.blog.heroImage} />
 
       <div className="px-[2%] sm:px-[4%] lg:px-[6%] max-w-7xl mx-auto py-12">
         {/* Tab bar */}
@@ -107,18 +110,30 @@ export default function Blog() {
         )}
 
         {tab === 'gallery' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {(gallery as { id: string; url: string; name: string }[]).map((f, i) => (
-              <motion.div key={f.id} initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }} transition={{ delay: i * 0.04 }}
-                className="aspect-square rounded-xl overflow-hidden bg-muted cursor-pointer group"
-                onClick={() => window.open(f.url, '_blank')}
-              >
-                <img src={f.url} alt={f.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-              </motion.div>
-            ))}
-            {(gallery as unknown[]).length === 0 && <p className="col-span-full text-center text-muted-foreground py-20">No gallery images published yet.</p>}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {(gallery as { id: string; url: string; name: string; caption?: string }[]).map((f, i) => (
+                <motion.button key={f.id} initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }} transition={{ delay: i * 0.04 }}
+                  className="aspect-square rounded-xl overflow-hidden bg-muted cursor-pointer group relative"
+                  onClick={() => { setGalleryIndex(i); setGalleryOpen(true) }}
+                >
+                  <img src={f.url} alt={f.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                    <Expand className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </motion.button>
+              ))}
+              {(gallery as unknown[]).length === 0 && <p className="col-span-full text-center text-muted-foreground py-20">No gallery images published yet.</p>}
+            </div>
+            {galleryOpen && (
+              <ImageGallery
+                images={(gallery as { id: string; url: string; name: string; caption?: string }[]).map(f => ({ url: f.url, caption: f.caption }))}
+                initialIndex={galleryIndex}
+                onClose={() => setGalleryOpen(false)}
+              />
+            )}
+          </>
         )}
       </div>
     </>

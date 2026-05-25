@@ -10,9 +10,9 @@ export default function Projects() {
   return (
     <>
       <PageHero
-        title={cfg.projects.heading}
-        subtitle={cfg.projects.subheading}
-        tag="Kumbi Initiatives"
+        title={cfg.pages.projects.heading}
+        subtitle={cfg.pages.projects.subheading}
+        tag={cfg.pages.projects.heroTag}
         img={cfg.pages.projects.heroImage}
       />
       <div className="section">
@@ -32,7 +32,7 @@ export default function Projects() {
               <div className="p-6 flex flex-col flex-1 gap-3">
                 <span className="text-xs font-bold uppercase tracking-widest text-primary/70">{p.tag}</span>
                 <h3 className="text-xl font-black mt-1 mb-2">{p.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed flex-1">{p.description}</p>
+                <p className="text-muted-foreground text-sm leading-relaxed flex-1 rich-content" dangerouslySetInnerHTML={{ __html: p.description }} />
                 <Link to={p.link} className="inline-flex items-center gap-1.5 text-sm font-bold text-primary group-hover:gap-2.5 transition-all mt-2">
                   Learn more <ArrowRight className="w-4 h-4" />
                 </Link>

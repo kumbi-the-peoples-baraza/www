@@ -4,22 +4,23 @@ import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { formsApi } from '@/api/client'
 import OverlayPanel from './OverlayPanel'
+import CaptchaField from './CaptchaField'
 
 const schema = z.object({
   name: z.string().min(1, 'Required'),
   email: z.string().email('Invalid email'),
   subject: z.string().min(1, 'Required'),
   message: z.string().min(10, 'Message too short'),
-  _hp: z.string().max(0, 'Bot detected'), // honeypot — must stay empty
+  _hp: z.string().max(0, 'Bot detected'),
+  _captcha_token: z.string().min(1, 'Captcha required'),
+  _captcha_answer: z.string().min(1, 'Please answer the captcha'),
 })
 type FormData = z.infer<typeof schema>
 
 interface Props { open: boolean; onClose: () => void }
 
-const W = '85%'
-
 export default function ContactOverlay({ open, onClose }: Props) {
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
   const mutation = useMutation({
@@ -29,10 +30,10 @@ export default function ContactOverlay({ open, onClose }: Props) {
 
   return (
     <OverlayPanel open={open} onClose={onClose} title="Contact Us" subtitle="We'd love to hear from you">
-      <form onSubmit={handleSubmit(d => mutation.mutate(d))} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', width: W, margin: '0 auto' }}>
-        {/* Honeypot — hidden from humans, bots fill it, Zod rejects if non-empty */}
+      <form onSubmit={handleSubmit(d => mutation.mutate(d))} className="overlay-form">
         <input {...register('_hp')} type="text" tabIndex={-1} autoComplete="off"
           style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
+        <input type="hidden" {...register('_captcha_token')} />
         <Field label="Full Name" error={errors.name?.message}>
           <input {...register('name')} className="input-field" placeholder="Your full name" />
         </Field>
@@ -45,6 +46,11 @@ export default function ContactOverlay({ open, onClose }: Props) {
         <Field label="Message" error={errors.message?.message}>
           <textarea {...register('message')} rows={6} className="input-field" style={{ resize: 'vertical' }} placeholder="Tell us more…" />
         </Field>
+        <CaptchaField
+          setToken={t => setValue('_captcha_token', t)}
+          onAnswerChange={v => setValue('_captcha_answer', v)}
+          error={errors._captcha_answer?.message}
+        />
         <button type="submit" disabled={mutation.isPending} className="btn-primary" style={{ width: '100%' }}>
           {mutation.isPending ? 'Sending…' : 'Send Message'}
         </button>
@@ -57,8 +63,8 @@ export default function ContactOverlay({ open, onClose }: Props) {
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-      <label className="form-label">{label}</label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+      <label className="form-label overlay-label">{label}</label>
       {children}
       {error && <p style={{ color: 'hsl(var(--destructive))', fontWeight: 600, fontSize: '0.9rem', marginTop: '0.25rem' }}>{error}</p>}
     </div>

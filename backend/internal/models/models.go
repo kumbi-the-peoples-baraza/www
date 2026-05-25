@@ -61,12 +61,25 @@ type ContentBlock struct {
 }
 
 type MediaFile struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	Name      string    `json:"name" db:"name"`
-	URL       string    `json:"url" db:"url"`
-	MimeType  string    `json:"mimeType" db:"mime_type"`
-	Size      int64     `json:"size" db:"size"`
-	CreatedAt time.Time `json:"createdAt" db:"created_at"`
+	ID               uuid.UUID              `json:"id" db:"id"`
+	Name             string                 `json:"name" db:"name"`
+	URL              string                 `json:"url" db:"url"`
+	ThumbnailURL     string                 `json:"thumbnailUrl" db:"thumbnail_url"`
+	WebpURL          string                 `json:"webpUrl" db:"webp_url"`
+	MimeType         string                 `json:"mimeType" db:"mime_type"`
+	Size             int64                  `json:"size" db:"size"`
+	Width            int                    `json:"width" db:"width"`
+	Height           int                    `json:"height" db:"height"`
+	GalleryPublished bool                   `json:"galleryPublished" db:"gallery_published"`
+	Caption          string                 `json:"caption" db:"caption"`
+	Photographer     string                 `json:"photographer" db:"photographer"`
+	DateTaken        string                 `json:"dateTaken" db:"date_taken"`
+	UploaderID       *uuid.UUID             `json:"uploaderId" db:"uploader_id"`
+	Exif             map[string]interface{} `json:"exif" db:"exif"`
+	Locked           bool                   `json:"locked" db:"locked"`
+	Views            int                    `json:"views" db:"views"`
+	CreatedAt        time.Time              `json:"createdAt" db:"created_at"`
+	UpdatedAt        time.Time              `json:"updatedAt" db:"updated_at"`
 }
 
 type FormSubmission struct {

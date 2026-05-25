@@ -495,6 +495,9 @@ _install-ingress:
 
 .PHONY: _install-cert-manager
 _install-cert-manager:
+	@if [ "$(ENV)" != "prod" ]; then \
+	  echo "$(INFO) TLS is only supported for ENV=prod (skipping)"; exit 0; \
+	fi
 	$(call log,Installing cert-manager...)
 	kubectl --context k3d-$(CLUSTER) apply -f \
 	  https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.yaml
@@ -503,6 +506,22 @@ _install-cert-manager:
 	  deployment --all -n cert-manager --timeout=180s
 	$(call log,Applying ClusterIssuer...)
 	kubectl --context k3d-$(CLUSTER) apply -f $(OVERLAY)/issuer.yaml
+
+# ── TLS / Let's Encrypt (prod only) ────────────────────────────────────────────
+.PHONY: tls
+tls: check-config
+	@if [ "$(ENV)" != "prod" ]; then \
+	  echo "$(INFO) TLS is only supported for ENV=prod (got '$(ENV)')"; exit 1; \
+	fi
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Installing cert-manager and ClusterIssuer for ENV=$(ENV)..."; \
+	  $(MAKE) _install-cert-manager; \
+	  echo "$(INFO) Creating Certificate resource (kumbi-tls-cert)..."; \
+	  $(KUBECTL) apply -f $(OVERLAY)/certificate.yaml; \
+	  echo "$(INFO) Waiting for Let's Encrypt certificate to be issued..."; \
+	  $(KUBECTL) wait --for=condition=Ready certificate/kumbi-tls-cert -n $(NAMESPACE) --timeout=300s; \
+	  echo "$(INFO) TLS certificate ready — secret 'kumbi-tls-cert' is populated"; \
+	} 2>&1 | tee $(call logfile,tls)
 
 # ── Remote helpers (invoke prod commands from local machine via SSH) ───────────
 # Usage: make sync

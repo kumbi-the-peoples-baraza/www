@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -19,18 +20,27 @@ func scanPost(rows interface {
 	var coverImage, coverCaption, authorID *string
 	var publishedAt *time.Time
 	var createdAt, updatedAt time.Time
-	err := rows.Scan(&id, &slug, &title, &excerpt, &body, &coverImage, &coverCaption, &status, &authorID, &publishedAt, &createdAt, &updatedAt)
+	var galleryImages []byte
+	err := rows.Scan(&id, &slug, &title, &excerpt, &body, &coverImage, &coverCaption, &status, &authorID, &publishedAt, &createdAt, &updatedAt, &galleryImages)
 	if err != nil {
 		return nil, err
+	}
+	var gallery interface{}
+	if len(galleryImages) > 0 {
+		json.Unmarshal(galleryImages, &gallery)
+	}
+	if gallery == nil {
+		gallery = []interface{}{}
 	}
 	return gin.H{
 		"id": id, "slug": slug, "title": title, "excerpt": excerpt, "body": body,
 		"coverImage": coverImage, "coverCaption": coverCaption, "status": status,
 		"authorId": authorID, "publishedAt": publishedAt, "createdAt": createdAt, "updatedAt": updatedAt,
+		"galleryImages": gallery,
 	}, nil
 }
 
-const selectCols = `id, slug, title, excerpt, body, cover_image, cover_caption, status, author_id, published_at, created_at, updated_at`
+const selectCols = `id, slug, title, excerpt, body, cover_image, cover_caption, status, author_id, published_at, created_at, updated_at, gallery_images`
 
 func (h *BlogHandler) List(c *gin.Context) {
 	filter := "WHERE status='published'"
@@ -109,13 +119,14 @@ func (h *BlogHandler) Get(c *gin.Context) {
 
 func (h *BlogHandler) Create(c *gin.Context) {
 	var req struct {
-		Slug         string `json:"slug" binding:"required"`
-		Title        string `json:"title" binding:"required"`
-		Excerpt      string `json:"excerpt"`
-		Body         string `json:"body"`
-		CoverImage   string `json:"coverImage"`
-		CoverCaption string `json:"coverCaption"`
-		Status       string `json:"status"`
+		Slug          string        `json:"slug" binding:"required"`
+		Title         string        `json:"title" binding:"required"`
+		Excerpt       string        `json:"excerpt"`
+		Body          string        `json:"body"`
+		CoverImage    string        `json:"coverImage"`
+		CoverCaption  string        `json:"coverCaption"`
+		Status        string        `json:"status"`
+		GalleryImages []interface{} `json:"galleryImages"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -137,10 +148,11 @@ func (h *BlogHandler) Create(c *gin.Context) {
 		now := time.Now()
 		publishedAt = &now
 	}
+	galleryJSON, _ := json.Marshal(req.GalleryImages)
 	var id string
 	err := h.db.QueryRow(c,
-		`INSERT INTO blog_posts (slug, title, excerpt, body, cover_image, cover_caption, status, author_id, published_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-		req.Slug, req.Title, req.Excerpt, req.Body, coverImage, coverCaption, req.Status, authorID, publishedAt,
+		`INSERT INTO blog_posts (slug, title, excerpt, body, cover_image, cover_caption, status, author_id, published_at, gallery_images) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+		req.Slug, req.Title, req.Excerpt, req.Body, coverImage, coverCaption, req.Status, authorID, publishedAt, galleryJSON,
 	).Scan(&id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -152,13 +164,14 @@ func (h *BlogHandler) Create(c *gin.Context) {
 func (h *BlogHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req struct {
-		Title        *string `json:"title"`
-		Slug         *string `json:"slug"`
-		Excerpt      *string `json:"excerpt"`
-		Body         *string `json:"body"`
-		CoverImage   *string `json:"coverImage"`
-		CoverCaption *string `json:"coverCaption"`
-		Status       *string `json:"status"`
+		Title         *string       `json:"title"`
+		Slug          *string       `json:"slug"`
+		Excerpt       *string       `json:"excerpt"`
+		Body          *string       `json:"body"`
+		CoverImage    *string       `json:"coverImage"`
+		CoverCaption  *string       `json:"coverCaption"`
+		Status        *string       `json:"status"`
+		GalleryImages []interface{} `json:"galleryImages"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -169,6 +182,7 @@ func (h *BlogHandler) Update(c *gin.Context) {
 		now := time.Now()
 		publishedAt = &now
 	}
+	galleryJSON, _ := json.Marshal(req.GalleryImages)
 	_, err := h.db.Exec(c,
 		`UPDATE blog_posts SET
 			title=COALESCE($1,title), slug=COALESCE($2,slug), excerpt=COALESCE($3,excerpt),
@@ -176,9 +190,10 @@ func (h *BlogHandler) Update(c *gin.Context) {
 			cover_caption=COALESCE($6,cover_caption),
 			status=COALESCE($7,status),
 			published_at=CASE WHEN $8::timestamptz IS NOT NULL THEN $8 ELSE published_at END,
+			gallery_images=CASE WHEN $10::jsonb IS NOT NULL THEN $10 ELSE gallery_images END,
 			updated_at=NOW()
 		 WHERE id=$9`,
-		req.Title, req.Slug, req.Excerpt, req.Body, req.CoverImage, req.CoverCaption, req.Status, publishedAt, id,
+		req.Title, req.Slug, req.Excerpt, req.Body, req.CoverImage, req.CoverCaption, req.Status, publishedAt, id, galleryJSON,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

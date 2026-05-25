@@ -1,7 +1,6 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
-import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
 import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -19,12 +18,10 @@ export default function RichTextarea({ onChange, placeholder, className, initial
       StarterKit,
       Underline,
       Link.configure({ openOnClick: false }),
-      Image,
     ],
     content: initialContent || '',
     editorProps: {
       attributes: {
-        // prose classes make headings/lists render visually in real time
         class: 'min-h-[160px] outline-none max-w-none px-4 py-3 rich-content',
       },
     },
@@ -46,11 +43,6 @@ export default function RichTextarea({ onChange, placeholder, className, initial
     editor.chain().focus().setLink({ href: url }).run()
   }
 
-  const addImage = () => {
-    const url = window.prompt('Image URL')
-    if (url) editor.chain().focus().setImage({ src: url }).run()
-  }
-
   type Btn = { label: string; title: string; action: () => void; active?: boolean }
   const buttons: Btn[] = [
     { label: 'H1', title: 'Heading 1', action: () => editor.chain().focus().toggleHeading({ level: 1 }).run(), active: editor.isActive('heading', { level: 1 }) },
@@ -69,7 +61,6 @@ export default function RichTextarea({ onChange, placeholder, className, initial
     { label: '—',  title: 'Divider',      action: () => editor.chain().focus().setHorizontalRule().run() },
     { label: '|', title: '', action: () => {} },
     { label: '🔗', title: 'Link',   action: setLink,  active: editor.isActive('link') },
-    { label: '🖼',  title: 'Image',  action: addImage },
     { label: '|', title: '', action: () => {} },
     { label: '↩', title: 'Undo', action: () => editor.chain().focus().undo().run() },
     { label: '↪', title: 'Redo', action: () => editor.chain().focus().redo().run() },

@@ -4,18 +4,21 @@ import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { formsApi } from '@/api/client'
 import { Mail, Phone, MapPin } from 'lucide-react'
+import CaptchaField from '@/components/ui/CaptchaField'
 
 const schema = z.object({
   name: z.string().min(1, 'Required'),
   email: z.string().email('Invalid email'),
   subject: z.string().min(1, 'Required'),
   message: z.string().min(10, 'Message too short'),
+  _captcha_token: z.string().min(1, 'Captcha required'),
+  _captcha_answer: z.string().min(1, 'Please answer the captcha'),
 })
 
 type FormData = z.infer<typeof schema>
 
 export default function Contact() {
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
@@ -30,7 +33,6 @@ export default function Contact() {
       <p className="text-muted-foreground mb-10 text-base">Get in touch — we'd love to hear from you.</p>
 
       <div className="grid md:grid-cols-2 gap-12">
-        {/* Contact info */}
         <div className="flex flex-col gap-6">
           {[
             { icon: Mail,    label: 'Email',    value: 'hello@kumbi.org' },
@@ -49,8 +51,8 @@ export default function Contact() {
           ))}
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="card flex flex-col gap-5">
+          <input type="hidden" {...register('_captcha_token')} />
           <div>
             <label className="form-label">Name</label>
             <input {...register('name')} className="input-field" placeholder="Your full name" />
@@ -71,6 +73,11 @@ export default function Contact() {
             <textarea {...register('message')} rows={5} className="input-field resize-none" placeholder="Tell us more..." />
             {errors.message && <p className="text-sm text-destructive mt-1.5">{errors.message.message}</p>}
           </div>
+          <CaptchaField
+            setToken={t => setValue('_captcha_token', t)}
+            onAnswerChange={v => setValue('_captcha_answer', v)}
+            error={errors._captcha_answer?.message}
+          />
           <button type="submit" disabled={mutation.isPending} className="btn-primary w-full">
             {mutation.isPending ? 'Sending…' : 'Send Message'}
           </button>

@@ -1,0 +1,18 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kumbi-tls-cert
+  namespace: kumbi
+spec:
+  secretName: kumbi-tls-cert
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - kumbike.org
+    - www.kumbike.org
+    - trace.kumbike.org
+    - vote.kumbike.org
+    - oops.kumbike.org
+    - dev.kumbike.org

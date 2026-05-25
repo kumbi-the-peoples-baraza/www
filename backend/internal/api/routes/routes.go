@@ -58,6 +58,7 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 	v1.GET("/analytics", analyticsH.Get)
 	v1.GET("/config", configH.Get)
 	v1.POST("/track", analyticsH.Track)
+	v1.GET("/captcha/challenge", formsH.CaptchaChallenge)
 	v1.POST("/forms/contact", formsH.Submit("contact"))
 	v1.POST("/forms/volunteer", formsH.Submit("volunteer"))
 
@@ -82,10 +83,15 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 
 		cms.GET("/forms/:type/submissions", middleware.RequireRole("admin", "editor"), formsH.ListSubmissions)
 		cms.GET("/forms/:type/export/csv", middleware.RequireRole("admin", "editor"), formsH.ExportCSV)
+		cms.GET("/forms/:type/export/pdf", middleware.RequireRole("admin", "editor"), formsH.ExportPDF)
 
 		cms.POST("/media", mediaH.Upload)
 		cms.GET("/media", mediaH.List)
+		cms.GET("/media/:id", mediaH.Get)
 		cms.PUT("/media/:id/gallery", middleware.RequireRole("admin", "editor"), mediaH.SetGallery)
+		cms.PUT("/media/:id/name", middleware.RequireRole("admin", "editor"), mediaH.UpdateName)
+		cms.PUT("/media/:id/caption", middleware.RequireRole("admin", "editor"), mediaH.UpdateCaption)
+		cms.PUT("/media/:id/metadata", middleware.RequireRole("admin", "editor"), mediaH.UpdateMetadata)
 		cms.DELETE("/media/:id", middleware.RequireRole("admin"), mediaH.Delete)
 
 		cms.PUT("/appearance", middleware.RequireRole("admin"), appearanceH.Update)

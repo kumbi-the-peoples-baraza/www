@@ -1,3 +1,8 @@
+export interface GalleryImage {
+  url: string
+  caption?: string
+}
+
 export interface BlogPost {
   id: string;
   slug: string;
@@ -6,9 +11,33 @@ export interface BlogPost {
   body: string;
   coverImage?: string;
   coverCaption?: string;
+  galleryImages?: GalleryImage[];
   status: "published" | "draft" | "archived";
   authorId?: string;
   publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaFile {
+  id: string;
+  name: string;
+  url: string;
+  thumbnailUrl?: string;
+  webpUrl?: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  views?: number;
+  galleryPublished: boolean;
+  caption?: string;
+  photographer?: string;
+  dateTaken?: string;
+  uploaderId?: string;
+  uploaderName?: string;
+  exif?: Record<string, unknown>;
+  locked?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,13 +1,96 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { blogApi } from '@/api/client'
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
+import { blogApi, mediaApi } from '@/api/client'
+import { useState, useRef } from 'react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, Image, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import RichTextarea from '@/components/ui/RichTextarea'
 import ImagePicker from '@/components/ui/ImagePicker'
-import type { BlogPost } from '@/types'
+import type { BlogPost, GalleryImage, MediaFile } from '@/types'
 
 type Draft = Partial<BlogPost>
+
+function GalleryImageEditor({ images, onChange }: { images: GalleryImage[]; onChange: (v: GalleryImage[]) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+
+  const { data: libraryFiles = [] } = useQuery({
+    queryKey: ['media'],
+    queryFn: () => mediaApi.list().then(r => r.data as MediaFile[]),
+    enabled: libraryOpen,
+  })
+
+  const libraryImages = libraryFiles.filter((f: MediaFile) => f.mimeType.startsWith('image/'))
+
+  const addFromLibrary = (url: string) => {
+    onChange([...images, { url, caption: '' }])
+  }
+
+  const uploadAndAdd = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const result = await mediaApi.upload(file, {}).then(r => r.data as { id: string; url: string })
+    onChange([...images, { url: result.url, caption: '' }])
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const updateCaption = (idx: number, caption: string) => {
+    const copy = [...images]
+    copy[idx] = { ...copy[idx], caption }
+    onChange(copy)
+  }
+
+  const remove = (idx: number) => {
+    onChange(images.filter((_, i) => i !== idx))
+  }
+
+  return (
+    <div>
+      <label className="form-label">Gallery Images</label>
+      <p className="text-xs text-muted-foreground mb-3">Add images that will appear in a gallery at the bottom of the post.</p>
+      <div className="flex flex-wrap gap-3 mb-3">
+        {images.map((img, i) => (
+          <div key={i} className="relative group w-32">
+            <img src={img.url} alt="" className="w-32 h-24 object-cover rounded-lg border border-border" />
+            <button
+              onClick={() => remove(i)}
+              className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <X className="w-3 h-3" />
+            </button>
+            <input
+              value={img.caption || ''}
+              onChange={e => updateCaption(i, e.target.value)}
+              className="input-field text-xs mt-1 w-full"
+              placeholder="Caption…"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => fileRef.current?.click()} className="btn-ghost text-sm flex items-center gap-1.5">
+          <Plus className="w-4 h-4" /> Upload Image
+        </button>
+        <button type="button" onClick={() => setLibraryOpen(v => !v)} className="btn-ghost text-sm flex items-center gap-1.5">
+          <Image className="w-4 h-4" /> {libraryOpen ? 'Hide library' : 'Select from media library'}
+        </button>
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadAndAdd} />
+      {libraryOpen && (
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mt-3 max-h-48 overflow-y-auto p-2 rounded-xl border border-border bg-muted/30">
+          {libraryImages.map((f: MediaFile) => (
+            <button key={f.id} type="button" onClick={() => addFromLibrary(f.url)}
+              className="aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-all">
+              <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+            </button>
+          ))}
+          {libraryImages.length === 0 && (
+            <p className="col-span-full text-sm text-muted-foreground py-4 text-center">No images yet. Upload one above.</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CMSBlog() {
   const qc = useQueryClient()
@@ -110,6 +193,11 @@ export default function CMSBlog() {
               placeholder="Write your post here…"
             />
           </div>
+
+          <GalleryImageEditor
+            images={editing.galleryImages || []}
+            onChange={v => setEditing({ ...editing, galleryImages: v })}
+          />
 
           <div className="flex items-center gap-4">
             <div>

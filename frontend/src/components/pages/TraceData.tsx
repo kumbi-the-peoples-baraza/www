@@ -1,30 +1,15 @@
 import { motion } from "framer-motion";
-import { Search, BarChart3, Users, AlertTriangle } from "lucide-react";
+import { Search, BarChart3, Users, AlertTriangle, Star } from "lucide-react";
 import PageHero from "@/components/ui/PageHero";
 import { useConfig } from "@/hooks/useConfig";
 import GithubReadme from "./MarkDownLoader";
-const features = [
-  {
-    icon: Search,
-    title: "Crowd-sourced Reports",
-    desc: "Anyone can submit a missing persons report with photos, last known location, and circumstances.",
-  },
-  {
-    icon: BarChart3,
-    title: "Data Analysis",
-    desc: "Pattern recognition and geospatial analysis to identify clusters and trends in disappearances.",
-  },
-  {
-    icon: Users,
-    title: "Community Verification",
-    desc: "Community members verify and corroborate reports, building a trusted, tamper-resistant dataset.",
-  },
-  {
-    icon: AlertTriangle,
-    title: "Real-time Alerts",
-    desc: "Instant notifications to families, lawyers, and human rights organisations when new data emerges.",
-  },
-];
+
+const FEATURE_ICONS: Record<string, React.ElementType> = {
+  'crowd-reports': Search,
+  'data-analysis': BarChart3,
+  'community-verification': Users,
+  'real-time-alerts': AlertTriangle,
+};
 
 export default function TraceData() {
   const cfg = useConfig();
@@ -32,33 +17,36 @@ export default function TraceData() {
   return (
     <>
       <PageHero
-        title="KumbiTrace"
-        subtitle="A crowd-sourced missing persons tracking and data analysis platform — born from the 2024 Nairobi protests."
-        tag="Missing Persons · Data"
+        title={cfg.pages.trace.heading}
+        subtitle={cfg.pages.trace.subheading}
+        tag={cfg.pages.trace.heroTag}
         img={cfg.pages.trace.heroImage}
       />
       <div className="section">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {features.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="glass-card p-7 flex gap-5"
-            >
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <f.icon className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-black text-lg mb-1">{f.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  {f.desc}
-                </p>
-              </div>
-            </motion.div>
-          ))}
+          {cfg.pages.trace.features.map((f, i) => {
+            const Icon = FEATURE_ICONS[f.id] || Star;
+            return (
+              <motion.div
+                key={f.id}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="glass-card p-7 flex gap-5"
+              >
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Icon className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg mb-1">{f.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {f.description}
+                  </p>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
 
         <div className="section glass-card">

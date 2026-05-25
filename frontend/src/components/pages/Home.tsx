@@ -94,9 +94,9 @@ function ParallaxHero({ cfg }: { cfg: ReturnType<typeof useConfig> }) {
           <h1 className="text-5xl sm:text-7xl font-black mb-6 leading-[1.05] text-white tracking-tight">
             {cfg.hero.heading}
           </h1>
-          <span className="text-xl font-semibold text-center sm:text-xl text-white/75 mb-10 max-w-xl  mx-auto leading-tight">
-            {cfg.hero.subheading}
-          </span>
+          <span className="text-xl font-semibold text-center sm:text-xl text-white/75 mb-10 max-w-xl mx-auto leading-tight rich-content"
+            dangerouslySetInnerHTML={{ __html: cfg.hero.subheading }} />
+        
           <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/projects" className="btn-primary">
               {cfg.hero.ctaPrimary} <ArrowRight className="w-5 h-5" />
@@ -163,9 +163,9 @@ function ProjectCard({
           </div>
           <h3 className="text-xl font-black tracking-tight">{project.title}</h3>
         </div>
-        <p className="text-muted-foreground text-sm leading-relaxed flex-1 mb-5">
-          {project.description}
-        </p>
+        <p className="text-muted-foreground text-sm leading-relaxed flex-1 mb-5 rich-content"
+          dangerouslySetInnerHTML={{ __html: project.description }} />
+        
         <Link
           to={project.link}
           className="inline-flex items-center gap-2 text-sm font-bold text-primary group-hover:gap-3 transition-all"
@@ -212,9 +212,9 @@ export default function Home() {
             <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-4">
               {cfg.projects.heading}
             </h2>
-            <p className="text-white/70 max-w-xl mx-auto text-base">
-              {cfg.projects.subheading}
-            </p>
+            <p className="text-white/70 max-w-xl mx-auto text-base rich-content"
+              dangerouslySetInnerHTML={{ __html: cfg.projects.subheading }} />
+            
           </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-7">
             {cfg.projects.items.map((p, i) => (
@@ -250,9 +250,9 @@ export default function Home() {
           <h2 className="text-3xl sm:text-5xl font-black mb-6 text-white tracking-tight leading-tight">
             {cfg.volunteer.heading}
           </h2>
-          <p className="text-white/75 mb-10 text-base leading-relaxed">
-            {cfg.volunteer.subheading}
-          </p>
+          <p className="text-white/75 mb-10 text-base leading-relaxed rich-content"
+            dangerouslySetInnerHTML={{ __html: cfg.volunteer.subheading }} />
+          
           <button
             onClick={openVolunteer}
             className="inline-flex items-center gap-2 px-10 py-4 rounded-xl bg-white text-primary font-black text-base shadow-lg hover:bg-white/90 transition-colors border-2 border-white"

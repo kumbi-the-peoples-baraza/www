@@ -77,11 +77,11 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl flex bg-blue-200 items-center justify-center text-primary-foreground font-black text-base shadow-md">
+            <div className="w-9 h-9 rounded-xl flex bg-green-100  items-center justify-center font-black">
               <span id="logo"></span>
             </div>
             <span
-              className="font-black text-2xl items-center tracking-tight hidden sm:block"
+              className="font-black text-xl items-center tracking-tight hidden sm:block"
               style={{ color: "hsl(var(--nav-fg))" }}
             >
               Kumbi
