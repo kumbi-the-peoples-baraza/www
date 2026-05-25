@@ -17,19 +17,26 @@ go run ./cmd/server
 
 ## Environment variables
 
-| Variable               | Required | Description                                                             |
-| ---------------------- | -------- | ----------------------------------------------------------------------- |
-| `DATABASE_URL`         | yes      | PostgreSQL DSN e.g. `postgres://user:pass@host:5432/db?sslmode=disable` |
-| `JWT_SECRET`           | yes      | Random string, minimum 32 characters                                    |
-| `PORT`                 | no       | HTTP port (default: `8080`)                                             |
-| `ENV`                  | no       | `development` or `production` (default: `development`)                  |
-| `ALLOW_ORIGIN`         | no       | CORS allowed origin (default: `http://localhost:5173`)                  |
-| `STORAGE_PATH`         | no       | Path for uploaded files (default: `./storage`)                          |
-| `SMTP_HOST`            | no       | SMTP server for email notifications                                     |
-| `SMTP_PORT`            | no       | SMTP port (default: `587`)                                              |
-| `SMTP_USER`            | no       | SMTP username / from address                                            |
-| `SMTP_PASS`            | no       | SMTP password                                                           |
-| `WHATSAPP_WEBHOOK_URL` | no       | Webhook URL for WhatsApp notifications                                  |
+| Variable               | Required | Description                                                                      |
+| ---------------------- | -------- | -------------------------------------------------------------------------------- |
+| `DATABASE_URL`         | no       | Full Postgres connection string (preferred in k8s, set in `backend-secret`)      |
+| `POSTGRES_USER`        | yes*     | PostgreSQL user name (fallback when `DATABASE_URL` is not set)                   |
+| `POSTGRES_DB`          | yes*     | PostgreSQL database name (fallback)                                              |
+| `POSTGRES_PASSWORD`    | yes*     | PostgreSQL password (fallback)                                                   |
+| `POSTGRES_HOST`        | no       | PostgreSQL host (default: `postgres` — the k8s service name; fallback only)      |
+| `POSTGRES_PORT`        | no       | PostgreSQL port (default: `5432`; fallback only — also handles `tcp://ip:port`)  |
+| `JWT_SECRET`           | yes      | Random string, minimum 32 characters                                             |
+| `PORT`                 | no       | HTTP port (default: `8080`)                                                      |
+| `ENV`                  | no       | `development` or `production` (default: `development`)                           |
+| `ALLOW_ORIGIN`         | no       | CORS allowed origin (default: `http://localhost:5173`)                           |
+| `STORAGE_PATH`         | no       | Path for uploaded files (default: `./storage`)                                   |
+| `SMTP_HOST`            | no       | SMTP server for email notifications                                              |
+| `SMTP_PORT`            | no       | SMTP port (default: `587`)                                                       |
+| `SMTP_USER`            | no       | SMTP username / from address                                                     |
+| `SMTP_PASS`            | no       | SMTP password                                                                    |
+| `WHATSAPP_WEBHOOK_URL` | no       | Webhook URL for WhatsApp notifications                                           |
+
+> In Kubernetes, the backend receives `DATABASE_URL` from the `backend-secret` Secret (computed by `scripts/generate-secrets.sh` from `POSTGRES_USER/DB/PASSWORD`). For local dev and docker-compose, `DATABASE_URL` is not set — the backend falls back to `resolveDSN()` which compiles the connection string from individual `POSTGRES_*` vars. The `resolvePort()` function also strips the `tcp://ip:` prefix that k8s services inject into `POSTGRES_PORT`.
 
 ## Creating users
 

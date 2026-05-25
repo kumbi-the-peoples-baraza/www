@@ -1,30 +1,30 @@
+---
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: kumbi
-      POSTGRES_USER: kumbi
+      POSTGRES_USER: fundi
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kumbi_secret}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    ports: [5432:5432]
+    volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kumbi"]
+      test: [CMD-SHELL, pg_isready -U fundi]
       interval: 5s
       timeout: 5s
       retries: 5
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
+    ports: [8080:8080]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://kumbi:kumbi_secret@postgres:5432/kumbi?sslmode=disable}
+      POSTGRES_USER: fundi
+      POSTGRES_DB: kumbi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kumbi_secret}
+      POSTGRES_HOST: postgres
       JWT_SECRET: ${JWT_SECRET}
-      PORT: "8080"
+      PORT: '8080'
       ENV: ${ENV:-production}
       ALLOW_ORIGIN: ${ALLOW_ORIGIN:-http://localhost:5173}
       STORAGE_PATH: /app/storage
@@ -33,23 +33,18 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
-    volumes:
-      - storage:/app/storage
+    volumes: [storage:/app/storage]
     depends_on:
       postgres:
         condition: service_healthy
-
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-
+    ports: [80:80]
+    depends_on: [backend]
 volumes:
   pgdata:
   storage:

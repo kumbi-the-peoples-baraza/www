@@ -12,12 +12,12 @@ ports:
   - port: 443:443
     nodeFilters: [loadbalancer]
 volumes:
-  - volume: /home/kumbi/volumes/kumbi-prod/postgres-data:/var/lib/postgres
+  - volume: /home/kumbi/volumes/kumbi/postgres-data:/var/lib/postgres/
     nodeFilters: [server:0]
-  - volume: /home/kumbi/volumes/kumbi-prod/storage:/app/storage
+  - volume: /home/kumbi/volumes/kumbi/storage:/app/storage/
     nodeFilters: [server:0]
-  - volume: /home/kumbi/volumes/kumbi-prod/backups:/app/backups
-    nodeFilters: [server:0]
+  # - volume: /home/kumbi/volumes/kumbi/backups:/app/backups
+  #   nodeFilters: [server:0]
 options:
   k3s:
     extraArgs:
@@ -31,4 +31,4 @@ options:
         nodeFilters: [server:*]
   k3d:
     wait: true
-    timeout: 120s
+    timeout: 180s

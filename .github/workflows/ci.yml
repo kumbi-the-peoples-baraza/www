@@ -14,8 +14,8 @@ concurrency:
 
 env:
   REGISTRY: ${{ vars.REGISTRY || 'ghcr.io/kumbi' }}
-  BACKEND_IMG: kumbi/backend
-  FRONTEND_IMG: kumbi/frontend
+  BACKEND_IMG: backend
+  FRONTEND_IMG: frontend
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
@@ -43,17 +43,29 @@ jobs:
         with:
           go-version: "1.23"
           cache-dependency-path: backend/go.sum
+      - name: Create log dir
+        run: mkdir -p logs
       - name: Run tests
         working-directory: backend
         env:
-          DATABASE_URL: postgres://kumbi:kumbi_secret@localhost:5432/kumbi_test?sslmode=disable
+          POSTGRES_USER: kumbi
+          POSTGRES_DB: kumbi_test
+          POSTGRES_PASSWORD: kumbi_secret
+          POSTGRES_HOST: localhost
           JWT_SECRET: ci_test_secret_at_least_32_chars_long
-        run: go test ./... -v -race -coverprofile=coverage.out
+        run: go test ./... -v -race -coverprofile=coverage.out 2>&1 | tee ../logs/test-backend-$(date +%Y%m%d-%H%M%S).log
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
           path: backend/coverage.out
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-test-backend
+          path: logs/
+          retention-days: 7
 
   # ── 2. Frontend tests ───────────────────────────────────────────────────────
   test-frontend:
@@ -62,14 +74,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: Create log dir
+        run: mkdir -p logs
       - name: Install & build
         working-directory: frontend
         run: |
-          bun install --frozen-lockfile
-          bun run build
+          bun install --frozen-lockfile 2>&1 | tee ../logs/frontend-install-$(date +%Y%m%d-%H%M%S).log
+          bun run build 2>&1 | tee -a ../logs/frontend-build-$(date +%Y%m%d-%H%M%S).log
       - name: Lint
         working-directory: frontend
-        run: bun run lint || true   # non-blocking until lint is fully configured
+        run: bun run lint 2>&1 | tee ../logs/frontend-lint-$(date +%Y%m%d-%H%M%S).log || true
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-test-frontend
+          path: logs/
+          retention-days: 7
 
   # ── 3. Build & push images ──────────────────────────────────────────────────
   build-images:
@@ -86,6 +107,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create log dir
+        run: mkdir -p logs
+
       - name: Log in to registry
         uses: docker/login-action@v3
         with:
@@ -95,6 +119,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
 
       - name: Compute image tag
         id: meta
@@ -130,6 +157,27 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-build
+          path: logs/
+          retention-days: 7
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMG }}:${{ steps.meta.outputs.tag }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}:latest', env.REGISTRY, env.FRONTEND_IMG) || '' }}
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL_STAGING || 'http://localhost/api' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ── 4. Deploy — Staging (auto on tags) ─────────────────────────────────────
   deploy-staging:
     name: Deploy — Staging
@@ -142,20 +190,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create log dir
+        run: mkdir -p logs
+
       - name: Write staging secrets
         run: |
-          cat > infra/k8s/overlays/staging/secrets.yaml <<EOF
+          echo "STAGING_POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}" > /dev/null
+          cat > infra/k8s/overlays/staging/secrets.yaml <<'EOF'
           apiVersion: v1
           kind: Secret
           metadata:
             name: backend-secret
-            namespace: kumbi-staging
+            namespace: kumbi
           type: Opaque
           stringData:
-            DATABASE_URL: "${{ secrets.STAGING_DATABASE_URL }}"
             JWT_SECRET: "${{ secrets.STAGING_JWT_SECRET }}"
             ALLOW_ORIGIN: "${{ vars.STAGING_URL }}"
             STORAGE_PATH: /app/storage
+            DATABASE_URL: "postgres://${{ secrets.STAGING_POSTGRES_USER }}:${{ secrets.STAGING_POSTGRES_PASSWORD }}@postgres:5432/${{ secrets.STAGING_POSTGRES_DB }}?sslmode=disable"
             SEED_ADMIN_EMAIL: "${{ secrets.SEED_ADMIN_EMAIL }}"
             SEED_ADMIN_PASSWORD: "${{ secrets.SEED_ADMIN_PASSWORD }}"
             SMTP_HOST: "${{ secrets.SMTP_HOST }}"
@@ -168,11 +220,16 @@ jobs:
           kind: Secret
           metadata:
             name: postgres-secret
-            namespace: kumbi-staging
+            namespace: kumbi
           type: Opaque
           stringData:
+            POSTGRES_USER: "${{ secrets.STAGING_POSTGRES_USER }}"
+            POSTGRES_DB: "${{ secrets.STAGING_POSTGRES_DB }}"
             POSTGRES_PASSWORD: "${{ secrets.STAGING_POSTGRES_PASSWORD }}"
           EOF
+
+      - name: Run generate-secrets
+        run: bash scripts/generate-secrets.sh infra/k8s/overlays/staging/secrets.yaml
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
@@ -186,14 +243,22 @@ jobs:
           REGISTRY: ${{ env.REGISTRY }}
           TAG: ${{ needs.build-images.outputs.tag }}
         run: |
-          # Patch image tags in overlay before applying
           cd infra/k8s/overlays/staging
           kustomize edit set image \
             kumbi/backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMG }}:$TAG \
             kumbi/frontend=${{ env.REGISTRY }}/${{ env.FRONTEND_IMG }}:$TAG
-          kubectl apply -k .
-          kubectl rollout status deployment/backend  -n kumbi-staging --timeout=120s
-          kubectl rollout status deployment/frontend -n kumbi-staging --timeout=120s
+          mkdir -p ${{ github.workspace }}/logs
+          kubectl apply -k . 2>&1 | tee ${{ github.workspace }}/logs/staging-apply-$(date +%Y%m%d-%H%M%S).log
+          kubectl rollout status deployment/backend  -n kumbi-staging --timeout=120s 2>&1 | tee -a ${{ github.workspace }}/logs/staging-rollout-$(date +%Y%m%d-%H%M%S).log
+          kubectl rollout status deployment/frontend -n kumbi-staging --timeout=120s 2>&1 | tee -a ${{ github.workspace }}/logs/staging-rollout-$(date +%Y%m%d-%H%M%S).log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-deploy-staging
+          path: logs/
+          retention-days: 7
 
   # ── 5. Deploy — Production (manual approval required) ──────────────────────
   deploy-prod:
@@ -207,9 +272,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create log dir
+        run: mkdir -p logs
+
       - name: Write prod secrets
         run: |
-          cat > infra/k8s/overlays/prod/secrets.yaml <<EOF
+          cat > infra/k8s/overlays/prod/secrets.yaml <<'EOF'
           apiVersion: v1
           kind: Secret
           metadata:
@@ -217,10 +285,10 @@ jobs:
             namespace: kumbi
           type: Opaque
           stringData:
-            DATABASE_URL: "${{ secrets.PROD_DATABASE_URL }}"
             JWT_SECRET: "${{ secrets.PROD_JWT_SECRET }}"
             ALLOW_ORIGIN: "${{ vars.PROD_URL }}"
             STORAGE_PATH: /app/storage
+            DATABASE_URL: "postgres://${{ secrets.PROD_POSTGRES_USER }}:${{ secrets.PROD_POSTGRES_PASSWORD }}@postgres:5432/${{ secrets.PROD_POSTGRES_DB }}?sslmode=disable"
             SEED_ADMIN_EMAIL: "${{ secrets.SEED_ADMIN_EMAIL }}"
             SEED_ADMIN_PASSWORD: "${{ secrets.SEED_ADMIN_PASSWORD }}"
             SMTP_HOST: "${{ secrets.SMTP_HOST }}"
@@ -236,8 +304,13 @@ jobs:
             namespace: kumbi
           type: Opaque
           stringData:
+            POSTGRES_USER: "${{ secrets.PROD_POSTGRES_USER }}"
+            POSTGRES_DB: "${{ secrets.PROD_POSTGRES_DB }}"
             POSTGRES_PASSWORD: "${{ secrets.PROD_POSTGRES_PASSWORD }}"
           EOF
+
+      - name: Run generate-secrets
+        run: bash scripts/generate-secrets.sh infra/k8s/overlays/prod/secrets.yaml
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
@@ -255,14 +328,25 @@ jobs:
           kustomize edit set image \
             kumbi/backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMG }}:$TAG \
             kumbi/frontend=${{ env.REGISTRY }}/${{ env.FRONTEND_IMG }}:$TAG
-          kubectl apply -k .
-          kubectl rollout status deployment/backend  -n kumbi --timeout=180s
-          kubectl rollout status deployment/frontend -n kumbi --timeout=180s
+          kubectl apply -k . 2>&1 | tee ${{ github.workspace }}/logs/prod-apply-$(date +%Y%m%d-%H%M%S).log
+          kubectl rollout status deployment/backend  -n kumbi --timeout=180s 2>&1 | tee -a ${{ github.workspace }}/logs/prod-rollout-$(date +%Y%m%d-%H%M%S).log
+          kubectl rollout status deployment/frontend -n kumbi --timeout=180s 2>&1 | tee -a ${{ github.workspace }}/logs/prod-rollout-$(date +%Y%m%d-%H%M%S).log
 
       - name: Run seed job
         env:
           KUBECONFIG: /tmp/kubeconfig
+          REGISTRY: ${{ env.REGISTRY }}
+          TAG: ${{ needs.build-images.outputs.tag }}
         run: |
-          kubectl delete job seed-admin -n kumbi --ignore-not-found
-          kubectl apply -f infra/k8s/base/seed-job.yaml
+          kubectl delete job seed-admin -n kumbi --ignore-not-found 2>/dev/null || true
+          kubectl kustomize infra/k8s/overlays/prod | awk '/^---/{p=0} /kind: Job/{p=1} p' | kubectl apply -f -
           kubectl wait --for=condition=complete job/seed-admin -n kumbi --timeout=60s
+          kubectl logs -n kumbi -l job-name=seed-admin 2>&1 | tee ${{ github.workspace }}/logs/prod-seed-$(date +%Y%m%d-%H%M%S).log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-deploy-prod
+          path: logs/
+          retention-days: 7

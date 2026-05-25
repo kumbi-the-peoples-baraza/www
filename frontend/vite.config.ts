@@ -15,6 +15,7 @@ export default defineConfig({
       "@notebooks": path.resolve(__dirname, "./src/features/notebooks"),
     },
   },
+  assetsInclude: ["**/*.md"],
   server: {
     proxy: {
       "/api": { target: "http://localhost:8080", changeOrigin: true },

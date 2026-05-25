@@ -38,7 +38,7 @@ func (h *NotebooksHandler) Upload(c *gin.Context) {
 	err = h.db.QueryRow(
 		c,
 		`INSERT INTO notebooks (name, path) VALUES ($1,$2) RETURNING id`,
-		file.Filename, fmt.Sprintf("/storage/notebooks/%s", name),
+		file.Filename, fmt.Sprintf("/app/storage/notebooks/%s", name),
 	).Scan(&id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -95,7 +95,7 @@ func (h *NotebooksHandler) ImportFromGitHub(c *gin.Context) {
 	err = h.db.QueryRow(
 		c,
 		`INSERT INTO notebooks (name, path) VALUES ($1,$2) RETURNING id`,
-		origName, fmt.Sprintf("/storage/notebooks/%s", name),
+		origName, fmt.Sprintf("/app/storage/notebooks/%s", name),
 	).Scan(&id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

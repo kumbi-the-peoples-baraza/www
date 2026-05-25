@@ -16,13 +16,11 @@ spec:
           command:
             - sh
             - -c
-            - until pg_isready -h postgres -U kumbi; do echo "waiting for postgres..."; sleep 2; done
-          env:
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+            - until pg_isready -h postgres -U $POSTGRES_USER; do echo "waiting for
+              postgres..."; sleep 2; done
+          envFrom:
+            - secretRef:
+                name: postgres-secret
       containers:
         - name: seed
           image: kumbi/backend:latest
@@ -34,3 +32,5 @@ spec:
           envFrom:
             - secretRef:
                 name: backend-secret
+            - secretRef:
+                name: postgres-secret

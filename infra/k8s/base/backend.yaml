@@ -9,22 +9,6 @@ data:
   ENV: production
   STORAGE_PATH: /app/storage
 ---
-# apiVersion: v1
-# kind: PersistentVolume
-# metadata:
-#   name: storage-pv
-#   labels:
-#     type: local
-#     app: backend
-# spec:
-#   capacity:
-#     storage: 5Gi
-#   accessModes: [ReadWriteMany]
-#   hostPath:
-#     path: /app/storage
-#   persistentVolumeReclaimPolicy: Retain
-#   storageClassName: manual
-#---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -62,6 +46,8 @@ spec:
                 name: backend-config
             - secretRef:
                 name: backend-secret
+            - secretRef:
+                name: postgres-secret
           ports:
             - containerPort: 8080
           volumeMounts:

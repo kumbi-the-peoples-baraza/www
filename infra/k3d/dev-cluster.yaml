@@ -10,7 +10,7 @@
 apiVersion: k3d.io/v1alpha5
 kind: Simple
 metadata:
-  name: kumbi-dev
+  name: kumbi
 servers: 1
 agents: 0
 image: rancher/k3s:v1.33.6-k3s1
@@ -20,9 +20,9 @@ ports:
   - port: 443:443
     nodeFilters: [loadbalancer]
 volumes:
-  - volume: /home/ndiku/code/k8s/volumes/kumbi-dev/postgres-data:/var/lib/postgres/
+  - volume: /home/ndiku/code/k8s/volumes/kumbi/postgres-data:/var/lib/postgres/
     nodeFilters: [server:0]
-  - volume: /home/ndiku/code/k8s/volumes/kumbi-dev/storage:/app/storage/
+  - volume: /home/ndiku/code/k8s/volumes/kumbi/storage:/app/storage/
     nodeFilters: [server:0]
   # - volume: /windows/k8s/volumes/kumbi-dev/backups:/app/backups/
   #   nodeFilters:

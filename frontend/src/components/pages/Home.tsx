@@ -89,12 +89,12 @@ function ParallaxHero({ cfg }: { cfg: ReturnType<typeof useConfig> }) {
           transition={{ duration: 0.7 }}
         >
           <span className="inline-block px-5 py-2 rounded-full glass text-sm font-semibold mb-8 text-white/90">
-            Nairobi · Community · Impact
+            Kenya· Community · Impact
           </span>
           <h1 className="text-5xl sm:text-7xl font-black mb-6 leading-[1.05] text-white tracking-tight">
             {cfg.hero.heading}
           </h1>
-          <span className="text-lg sm:text-xl text-white/75 mb-10 max-w-2xl mx-auto leading-relaxed">
+          <span className="text-xl font-semibold text-center sm:text-xl text-white/75 mb-10 max-w-xl  mx-auto leading-tight">
             {cfg.hero.subheading}
           </span>
           <div className="flex flex-wrap gap-4 justify-center">

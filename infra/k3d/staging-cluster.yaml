@@ -1,0 +1,30 @@
+---
+# k3d cluster config — kumbi-staging
+# Separate cluster for staging environment; runs alongside dev and test.
+#
+# Usage: k3d cluster create --config infra/k3d/staging-cluster.yaml
+
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  name: kumbi-staging
+
+servers: 1
+agents: 0
+
+image: rancher/k3s:v1.33.6-k3s1
+
+ports:
+  - port: 8081:80
+    nodeFilters: [loadbalancer]
+  - port: 8444:443
+    nodeFilters: [loadbalancer]
+
+options:
+  k3s:
+    extraArgs:
+      - arg: --kube-proxy-arg=conntrack-max-per-core=0
+        nodeFilters: [server:*]
+      - arg: --kubelet-arg=feature-gates=KubeletInUserNamespace=true
+        nodeFilters: [server:*]

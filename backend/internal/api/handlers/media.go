@@ -33,7 +33,7 @@ func (h *MediaHandler) Upload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "save failed"})
 		return
 	}
-	url := fmt.Sprintf("/storage/%s", name)
+	url := fmt.Sprintf("/app/storage/%s", name)
 	var id string
 	err = h.db.QueryRow(
 		c,

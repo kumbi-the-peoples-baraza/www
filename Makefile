@@ -1,5 +1,5 @@
-# Kumbi — The People's Baraza
-# Usage: make <command> [ENV=dev|test|prod]
+# Kumbi — Toe People's Baraza
+# Usage: make <command> [ENV=dev|test|staging|prod] [CONTAINER=backend|frontend|postgres|all]
 # Run `make help` for a full list of commands.
 #
 # On the VPS, run commands directly (no SSH):
@@ -10,12 +10,28 @@
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
-# ── Environment ───────────────────────────────────────────────────────────────
-ENV ?= dev
+# ── Logging ─────────────────────────────────────────────────────────────────────
+LOGS_DIR  := logs
+TS        := $(shell date +%Y%m%d-%H%M%S)
+
+# Use: $(call logfile,action)  →  logs/action-env-timestamp.log
+logfile = $(LOGS_DIR)/$(1)-$(ENV)-$(TS).log
+
+# Wrap a recipe body with:  @+ bash -c '... 2>&1 | tee $$(call logfile,<name>)'
+# See _with_log definition below.
+
+# ── Environment & Container ───────────────────────────────────────────────────
+ENV       ?= dev
+CONTAINER ?= all
 
 # Validate ENV
-ifeq ($(filter $(ENV),dev test prod),)
-  $(error ENV must be dev, test, or prod — got '$(ENV)')
+ifeq ($(filter $(ENV),dev test staging prod),)
+  $(error ENV must be dev, test, staging, or prod — got '$(ENV)')
+endif
+
+# Validate CONTAINER
+ifeq ($(filter $(CONTAINER),backend frontend postgres all),)
+  $(error CONTAINER must be backend, frontend, postgres, or all — got '$(CONTAINER)')
 endif
 
 # ── Per-environment config ────────────────────────────────────────────────────
@@ -35,13 +51,21 @@ else ifeq ($(ENV),test)
   API_URL   ?= http://localhost:8080/api
   KUBECTL   := kubectl --context k3d-kumbi-test
   SECRETS   := $(OVERLAY)/secrets.yaml
+else ifeq ($(ENV),staging)
+  CLUSTER   := kumbi-staging
+  NAMESPACE := kumbi-staging
+  IMG_TAG   := staging
+  OVERLAY   := infra/k8s/overlays/staging
+  API_URL   ?= http://staging.kumbike.org/api
+  KUBECTL   := kubectl --context k3d-kumbi-staging
+  SECRETS   := $(OVERLAY)/secrets.yaml
 else
-  CLUSTER   := kumbi-dev
+  CLUSTER   := kumbi
   NAMESPACE := kumbi
   IMG_TAG   := dev
   OVERLAY   := infra/k8s/overlays/dev
   API_URL   ?= http://localhost/api
-  KUBECTL   := kubectl --context k3d-kumbi-dev
+  KUBECTL   := kubectl --context k3d-kumbi
   SECRETS   := $(OVERLAY)/secrets.yaml
 endif
 
@@ -59,8 +83,12 @@ INFO  := \033[1;36m[kumbi]\033[0m
 
 log = @echo -e "$(INFO) $(1)"
 
-ENV_FILE ?= .env
--include $(ENV_FILE)
+# _with_log: prefix a recipe line to capture its output to logs/<action>-<env>-<ts>.log
+# Usage:  @$(call _with_log,<action>,<shell-command>)
+define _with_log
+  mkdir -p $(LOGS_DIR) && { $(2) 2>&1 | tee $(call logfile,$(1)); }
+endef
+
 export
 
 # ── Help ──────────────────────────────────────────────────────────────────────
@@ -70,23 +98,41 @@ help:
 	@echo "  $(BOLD)Kumbi — The People's Baraza$(RESET)"
 	@echo ""
 	@echo "  $(BOLD)Usage$(RESET)"
-	@echo "    make <command> [ENV=dev|test|prod]   default ENV=dev"
+	@echo "    make <command> [ENV=dev|test|staging|prod] [CONTAINER=backend|frontend|postgres|all]"
+	@echo "    default: ENV=dev CONTAINER=all"
 	@echo ""
 	@echo "  $(BOLD)Core commands$(RESET)"
-	@echo "    make build    ENV=..   Build Docker images"
+	@echo "    make build    ENV=..   Build Docker images (default all, or set CONTAINER=)"
+	@echo "    make build-backend  ENV=..   Build backend image only"
+	@echo "    make build-frontend ENV=..   Build frontend image only"
 	@echo "    make deploy   ENV=..   Full clean-slate deploy (cluster + infra + app + seed)"
+	@echo "    make deploy-backend  ENV=..   Deploy backend only (restart)"
+	@echo "    make deploy-frontend ENV=..   Deploy frontend only"
+	@echo "    make deploy-postgres ENV=..   Deploy postgres only"
 	@echo "    make refresh  ENV=..   Rebuild images and redeploy (no cluster recreate)"
+	@echo "    make retry    ENV=..   Restart failing pods and re-run failed seed job"
 	@echo "    make migrate  ENV=..   Re-run DB migrations (restarts backend)"
 	@echo ""
 	@echo "  $(BOLD)Cluster$(RESET)"
 	@echo "    make cluster-create  ENV=..   Create k3d cluster"
 	@echo "    make cluster-delete  ENV=..   Delete k3d cluster"
-	@echo "    make status          ENV=..   Show pods/svc/ingress"
-	@echo "    make teardown        ENV=..   ⚠ Delete namespace (prompts)"
+	@echo "    make status          ENV=..   Docker containers + k8s nodes + pods/svc/ingress"
+	@echo "    make docker-ps       ENV=..   Show Docker containers in this cluster"
+	@echo "    make docker-logs     ENV=..   Follow k3d server logs"
+	@echo "    make nodes           ENV=..   Show Kubernetes nodes"
+	@echo "    make logs            ENV=.. CONTAINER=   Follow pod logs (default backend)"
+	@echo "    make describe        ENV=.. CONTAINER=   Describe deployment"
+	@echo "    make exec            ENV=.. CONTAINER=   Open shell in pod"
+	@echo "    make teardown        ENV=..   Delete namespace (prompts)"
+	@echo ""
+	@echo "  $(BOLD)Logging$(RESET)"
+	@echo "    make save-logs       ENV=..   Dump docker/k3d/k8s state to logs/"
+	@echo "    make images          ENV=..   List locally built Docker images"
+	@echo "    make logs-cleanup             Remove log files older than 30 days"
 	@echo ""
 	@echo "  $(BOLD)Prod extras (run from local machine)$(RESET)"
-	@echo "    make sync                     Rsync source to VPS"
-	@echo "    make remote CMD=<command>     Run any make command on VPS"
+	@echo "    make sync                     Rsync prod code to VPS"
+	@echo "    make remote CMD=...           Run any make command on VPS"
 	@echo "    make scale-up                 Scale backend+frontend to 3 replicas"
 	@echo "    make scale-down               Scale backend+frontend to 1 replica"
 	@echo "    make scale BACKEND=N FRONTEND=N"
@@ -95,10 +141,12 @@ help:
 	@echo "    make setup            Install frontend/backend dependencies"
 	@echo "    make test             Run tests"
 	@echo "    make lint             Run linters"
-	@echo "    make seed             Seed/reset admin user"
+	@echo "    make check-config     Validate secrets.yaml + generate DATABASE_URL"
+	@echo "    make generate-secrets Update DATABASE_URL from postgres-secret"
+	@echo "    make seed             Seed/reset admin user (runs k8s job)"
 	@echo "    make create-user NAME=.. EMAIL=.. PASS=.. ROLE=.."
 	@echo ""
-	@echo "  Current ENV=$(ENV)  CLUSTER=$(CLUSTER)  NAMESPACE=$(NAMESPACE)"
+	@echo "  Current ENV=$(ENV)  CONTAINER=$(CONTAINER)  CLUSTER=$(CLUSTER)  NAMESPACE=$(NAMESPACE)"
 	@echo ""
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -120,7 +168,11 @@ lint:
 	cd frontend && bun run lint
 
 # ── Secrets check ─────────────────────────────────────────────────────────────
-.PHONY: _secrets-check
+.PHONY: check-config _secrets-check
+
+check-config: _secrets-check generate-secrets
+	@mkdir -p $(LOGS_DIR) && { scripts/check-config.sh "$(SECRETS)" "$(ENV)" "$(OVERLAY)" 2>&1 | tee $(call logfile,check-config); }
+
 _secrets-check:
 	@[[ -f "$(SECRETS)" ]] || { \
 	  echo -e "\033[1;31m[error]\033[0m Missing $(SECRETS)"; \
@@ -129,27 +181,60 @@ _secrets-check:
 	@grep -q "CHANGE_ME" "$(SECRETS)" && { \
 	  echo -e "\033[1;31m[error]\033[0m $(SECRETS) still has CHANGE_ME values"; exit 1; } || true
 
-# ── k3d image import — rootless Docker compatible ─────────────────────────────
+.PHONY: generate-secrets
+generate-secrets:
+	@scripts/generate-secrets.sh "$(SECRETS)"
+
+# ── k3d image import ──────────────────────────────────────────────────────────
+# Pipes the image directly into the k3d server's containerd (avoids rootless
+# Docker socket issues with k3d image import tools container).
+# Tags with docker.io/ prefix so containerd names match what kubelet resolves.
 define import-image
-	docker save $(1) | docker exec -i k3d-$(2)-server-0 ctr images import -
+	docker tag $(1) docker.io/$(1) 2>/dev/null; \
+	docker save $(1) docker.io/$(1) | docker exec -i k3d-$(2)-server-0 ctr images import -
 endef
 
 # ── Cluster lifecycle ─────────────────────────────────────────────────────────
 .PHONY: cluster-create
 cluster-create:
-	$(call log,Creating $(ENV) cluster '$(CLUSTER)'...)
-	k3d cluster create --config infra/k3d/$(ENV)-cluster.yaml
-	k3d kubeconfig merge $(CLUSTER) --kubeconfig-merge-default
-	$(call log,Cluster ready — context: k3d-$(CLUSTER))
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Creating $(ENV) cluster '$(CLUSTER)'..."; \
+	  k3d cluster create --config infra/k3d/$(ENV)-cluster.yaml && \
+	  k3d kubeconfig merge $(CLUSTER) --kubeconfig-merge-default && \
+	  echo "$(INFO) Cluster ready — context: k3d-$(CLUSTER)"; \
+	} 2>&1 | tee $(call logfile,cluster-create)
 
 .PHONY: cluster-delete
 cluster-delete:
-	$(call log,Deleting $(ENV) cluster '$(CLUSTER)'...)
-	k3d cluster delete $(CLUSTER)
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Deleting $(ENV) cluster '$(CLUSTER)'..."; \
+	  k3d cluster delete $(CLUSTER); \
+	} 2>&1 | tee $(call logfile,cluster-delete)
 
 .PHONY: status
-status:
-	$(KUBECTL) get pods,svc,ingress,jobs -n $(NAMESPACE)
+status: docker-ps nodes
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Kubernetes resources in $(NAMESPACE):"; \
+	  $(KUBECTL) get pods,svc,ingress,jobs -n $(NAMESPACE); \
+	} 2>&1 | tee $(call logfile,status)
+
+.PHONY: docker-ps
+docker-ps:
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Docker containers in $(CLUSTER) cluster:"; \
+	  docker ps --filter "name=k3d-$(CLUSTER)" \
+	    --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'; \
+	} 2>&1 | tee $(call logfile,docker-ps)
+
+.PHONY: docker-logs
+docker-logs:
+	$(call log,Following k3d server logs for $(CLUSTER)...)
+	@docker logs -f k3d-$(CLUSTER)-server-0
+
+.PHONY: nodes
+nodes:
+	$(call log,Kubernetes nodes:)
+	$(KUBECTL) get nodes -o wide
 
 .PHONY: teardown
 teardown:
@@ -158,71 +243,248 @@ teardown:
 	  $(KUBECTL) delete namespace $(NAMESPACE) --ignore-not-found
 	$(call log,Namespace $(NAMESPACE) deleted)
 
+# ── Logs / Describe / Exec ───────────────────────────────────────────────────
+CTL_TARGET = $(if $(filter all,$(CONTAINER)),backend,$(CONTAINER))
+
+.PHONY: logs
+logs:
+	$(KUBECTL) logs -n $(NAMESPACE) -l app=$(CTL_TARGET) --tail=100 -f
+
+.PHONY: describe
+describe:
+	$(KUBECTL) describe deployment/$(CTL_TARGET) -n $(NAMESPACE)
+
+.PHONY: exec
+exec:
+	$(KUBECTL) exec -n $(NAMESPACE) -it deployment/$(CTL_TARGET) -- /bin/sh
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 .PHONY: build
 build:
-	$(call log,Building images for ENV=$(ENV)...)
-	docker build -t $(BACKEND_IMG) ./backend
-	docker build --build-arg VITE_API_BASE_URL=$(API_URL) \
-	  -t $(FRONTEND_IMG) ./frontend
-	$(call log,Loading images into cluster '$(CLUSTER)'...)
-	$(call import-image,$(BACKEND_IMG),$(CLUSTER))
-	$(call import-image,$(FRONTEND_IMG),$(CLUSTER))
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Building images for ENV=$(ENV) CONTAINER=$(CONTAINER)..."; \
+	  if [ "$(CONTAINER)" = "backend" ] || [ "$(CONTAINER)" = "all" ]; then \
+	    echo "$(INFO) Building backend..."; \
+	    docker build -t $(BACKEND_IMG) ./backend && \
+	    $(call import-image,$(BACKEND_IMG),$(CLUSTER)); \
+	  fi; \
+	  if [ "$(CONTAINER)" = "frontend" ] || [ "$(CONTAINER)" = "all" ]; then \
+	    echo "$(INFO) Building frontend..."; \
+	    docker build --build-arg VITE_API_BASE_URL=$(API_URL) -t $(FRONTEND_IMG) ./frontend && \
+	    $(call import-image,$(FRONTEND_IMG),$(CLUSTER)); \
+	  fi; \
+	} 2>&1 | tee $(call logfile,build)
+
+.PHONY: build-backend
+build-backend:
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Building backend image for ENV=$(ENV)..."; \
+	  docker build -t $(BACKEND_IMG) ./backend && \
+	  echo "$(INFO) Loading backend image into cluster '$(CLUSTER)'..."; \
+	  $(call import-image,$(BACKEND_IMG),$(CLUSTER)); \
+	} 2>&1 | tee $(call logfile,build-backend)
+
+.PHONY: build-frontend
+build-frontend:
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Building frontend image for ENV=$(ENV)..."; \
+	  docker build --build-arg VITE_API_BASE_URL=$(API_URL) -t $(FRONTEND_IMG) ./frontend && \
+	  echo "$(INFO) Loading frontend image into cluster '$(CLUSTER)'..."; \
+	  $(call import-image,$(FRONTEND_IMG),$(CLUSTER)); \
+	} 2>&1 | tee $(call logfile,build-frontend)
+
+# Granular deploy targets
+.PHONY: deploy-backend
+deploy-backend: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Deploying backend for ENV=$(ENV)..."; \
+	  $(KUBECTL) rollout restart deployment/backend -n $(NAMESPACE); \
+	  $(KUBECTL) rollout status deployment/backend -n $(NAMESPACE) --timeout=180s; \
+	  echo "$(INFO) Backend deployed"; \
+	} 2>&1 | tee $(call logfile,deploy-backend)
+
+.PHONY: deploy-frontend
+deploy-frontend: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Deploying frontend for ENV=$(ENV)..."; \
+	  $(KUBECTL) rollout restart deployment/frontend -n $(NAMESPACE); \
+	  $(KUBECTL) rollout status deployment/frontend -n $(NAMESPACE) --timeout=180s; \
+	  echo "$(INFO) Frontend deployed"; \
+	} 2>&1 | tee $(call logfile,deploy-frontend)
+
+.PHONY: deploy-postgres
+deploy-postgres: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Deploying postgres for ENV=$(ENV)..."; \
+	  $(KUBECTL) rollout restart deployment/postgres -n $(NAMESPACE); \
+	  $(KUBECTL) rollout status deployment/postgres -n $(NAMESPACE) --timeout=180s; \
+	  echo "$(INFO) Postgres deployed"; \
+	} 2>&1 | tee $(call logfile,deploy-postgres)
 
 # ── Deploy — full clean-slate ─────────────────────────────────────────────────
 .PHONY: deploy
-deploy: _secrets-check
-	$(call log,Starting clean-slate deploy for ENV=$(ENV)...)
-	# Wipe existing cluster and Docker state
-	k3d cluster stop $(CLUSTER) 2>/dev/null || true
-	k3d cluster delete $(CLUSTER) 2>/dev/null || true
-	#docker system prune -af --volumes 2>/dev/null || true
-	# Fresh cluster
-	$(MAKE) cluster-create ENV=$(ENV)
-ifeq ($(ENV),prod)
-	# Install NGINX ingress
-	$(MAKE) _install-ingress
-	# Install cert-manager + ClusterIssuer
-	$(MAKE) _install-cert-manager
-endif
-	# Build and load images
-	$(MAKE) build ENV=$(ENV)
-	# Apply overlay
-	$(KUBECTL) apply -k $(OVERLAY)
-	# Wait for rollout
-	$(KUBECTL) rollout status deployment/backend  -n $(NAMESPACE) --timeout=180s
-	$(KUBECTL) rollout status deployment/frontend -n $(NAMESPACE) --timeout=180s
-	# Seed admin
-	$(MAKE) _seed ENV=$(ENV)
-	$(call log,Deploy complete — ENV=$(ENV))
-	$(MAKE) status ENV=$(ENV)
+deploy: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Starting clean-slate deploy for ENV=$(ENV)..."; \
+	  k3d cluster stop $(CLUSTER) 2>/dev/null || true; \
+	  k3d cluster delete $(CLUSTER) 2>/dev/null || true; \
+	  $(MAKE) cluster-create ENV=$(ENV); \
+	  if [ "$(ENV)" = "prod" ]; then \
+	    $(MAKE) _install-ingress; \
+	  fi; \
+	  $(MAKE) build ENV=$(ENV); \
+	  $(KUBECTL) apply -k $(OVERLAY); \
+	  $(KUBECTL) rollout status deployment/backend  -n $(NAMESPACE) --timeout=180s; \
+	  $(KUBECTL) rollout status deployment/frontend -n $(NAMESPACE) --timeout=180s; \
+	  $(MAKE) _seed ENV=$(ENV); \
+	  echo "$(INFO) Deploy complete — ENV=$(ENV)"; \
+	  $(MAKE) status ENV=$(ENV); \
+	  if [ "$(ENV)" = "prod" ]; then \
+	    echo "$(INFO) TLS not yet configured. Run 'make tls' once the cluster is healthy."; \
+	  fi; \
+	} 2>&1 | tee $(call logfile,deploy)
 
 # ── Refresh — rebuild + redeploy, no cluster recreate ────────────────────────
 .PHONY: refresh
-refresh:
-	$(call log,Refreshing ENV=$(ENV)...)
-	$(MAKE) build ENV=$(ENV)
-	$(KUBECTL) rollout restart deployment/backend deployment/frontend -n $(NAMESPACE)
-	$(KUBECTL) rollout status  deployment/backend deployment/frontend -n $(NAMESPACE) --timeout=120s
-	$(call log,Refresh complete)
+refresh: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Refreshing ENV=$(ENV)..."; \
+	  $(MAKE) build ENV=$(ENV); \
+	  $(KUBECTL) apply -k $(OVERLAY); \
+	  $(KUBECTL) rollout restart deployment/backend  -n $(NAMESPACE); \
+	  $(KUBECTL) rollout restart deployment/frontend -n $(NAMESPACE); \
+	  $(KUBECTL) rollout status deployment/backend  -n $(NAMESPACE) --timeout=180s; \
+	  $(KUBECTL) rollout status deployment/frontend -n $(NAMESPACE) --timeout=180s; \
+	  echo "$(INFO) Deploy complete — ENV=$(ENV)"; \
+	  $(MAKE) status ENV=$(ENV); \
+	  echo "$(INFO) Refresh complete"; \
+	} 2>&1 | tee $(call logfile,refresh)
+
+# ── Retry — restart failing pods and re-run failed seed job ──────────────────
+# Detects deployments that aren't fully available and the seed job if it failed,
+# then restarts them and waits for readiness. Useful after a flaky deploy/refresh.
+.PHONY: retry
+retry: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Retrying failed resources for ENV=$(ENV)..."; \
+	  \
+	  echo "$(INFO) Step 1: Restarting deployments that are not fully available..."; \
+	  for dep in backend frontend postgres; do \
+	    ready=$$($(KUBECTL) get deployment/$$dep -n $(NAMESPACE) -o jsonpath='{.status.readyReplicas}' 2>/dev/null); \
+	    desired=$$($(KUBECTL) get deployment/$$dep -n $(NAMESPACE) -o jsonpath='{.status.replicas}' 2>/dev/null); \
+	    if [ "$$ready" != "$$desired" ] 2>/dev/null; then \
+	      echo "  → $$dep: $${ready:-0}/$${desired:-0} ready — restarting..."; \
+	      $(KUBECTL) rollout restart deployment/$$dep -n $(NAMESPACE) 2>/dev/null || \
+	        echo "  ⚠️  Could not restart $$dep"; \
+	      $(KUBECTL) rollout status deployment/$$dep -n $(NAMESPACE) --timeout=180s || \
+	        echo "  ⚠️  $$dep still not available after restart"; \
+	    else \
+	      echo "  ✓ $$dep: $${ready:-0}/$${desired:-0} ready"; \
+	    fi; \
+	  done; \
+	  \
+	  echo "$(INFO) Step 2: Re-running any failed seed job..."; \
+	  seed_status=$$($(KUBECTL) get job seed-admin -n $(NAMESPACE) -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null); \
+	  if [ "$$seed_status" == "True" ]; then \
+	    echo "  → seed-admin job failed — restarting..."; \
+	    $(KUBECTL) delete job seed-admin -n $(NAMESPACE) --ignore-not-found 2>/dev/null; \
+	    $(KUBECTL) kustomize $(OVERLAY) | awk '/^---/{p=0} /kind: Job/{p=1} p' | $(KUBECTL) apply -f - && \
+	    $(KUBECTL) wait --for=condition=complete job/seed-admin -n $(NAMESPACE) --timeout=180s && \
+	      echo "  ✓ seed-admin completed" || \
+	      echo "  ⚠️  seed-admin still failing — check logs with: $(KUBECTL) logs -n $(NAMESPACE) -l job-name=seed-admin"; \
+	  elif [ "$$seed_status" == "" ]; then \
+	    echo "  → seed-admin job not found — creating..."; \
+	    $(KUBECTL) kustomize $(OVERLAY) | awk '/^---/{p=0} /kind: Job/{p=1} p' | $(KUBECTL) apply -f -; \
+	    $(KUBECTL) wait --for=condition=complete job/seed-admin -n $(NAMESPACE) --timeout=180s && \
+	      echo "  ✓ seed-admin completed" || \
+	      echo "  ⚠️  seed-admin still failing — check logs with: $(KUBECTL) logs -n $(NAMESPACE) -l job-name=seed-admin"; \
+	  else \
+	    echo "  ✓ seed-admin already complete"; \
+	  fi; \
+	  \
+	  echo "$(INFO) Step 3: Final status..."; \
+	  $(MAKE) status ENV=$(ENV); \
+	  echo "$(INFO) Retry complete — ENV=$(ENV)"; \
+	} 2>&1 | tee $(call logfile,retry)
 
 # ── Migrate — restart backend to re-run migrations ───────────────────────────
 .PHONY: migrate
-migrate:
-	$(call log,Running migrations for ENV=$(ENV)...)
-	$(KUBECTL) rollout restart deployment/backend -n $(NAMESPACE)
-	$(KUBECTL) rollout status  deployment/backend -n $(NAMESPACE) --timeout=60s
-	$(call log,Migrations complete)
+migrate: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Running migrations for ENV=$(ENV)..."; \
+	  $(KUBECTL) rollout restart deployment/backend -n $(NAMESPACE); \
+	  $(KUBECTL) rollout status  deployment/backend -n $(NAMESPACE) --timeout=180s; \
+	  echo "$(INFO) Migrations complete"; \
+	} 2>&1 | tee $(call logfile,migrate)
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
 .PHONY: _seed
 _seed:
-	$(KUBECTL) delete job seed-admin -n $(NAMESPACE) --ignore-not-found
-	$(KUBECTL) apply -k $(OVERLAY)
-	$(KUBECTL) wait --for=condition=complete job/seed-admin -n $(NAMESPACE) --timeout=60s
-	$(KUBECTL) logs -n $(NAMESPACE) -l job-name=seed-admin
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Seeding admin user via k8s job..."; \
+	  $(KUBECTL) delete job seed-admin -n $(NAMESPACE) --ignore-not-found 2>/dev/null || true; \
+	  $(KUBECTL) kustomize $(OVERLAY) | awk '/^---/{p=0} /kind: Job/{p=1} p' | $(KUBECTL) apply -f -; \
+	  $(KUBECTL) wait --for=condition=complete job/seed-admin -n $(NAMESPACE) --timeout=180s; \
+	  $(KUBECTL) logs -n $(NAMESPACE) -l job-name=seed-admin; \
+	} 2>&1 | tee $(call logfile,seed)
 
-# ── Prod infra helpers (run locally on VPS) ───────────────────────────────────
+.PHONY: seed
+seed: check-config
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "$(INFO) Seeding admin user via k8s job..."; \
+	  $(KUBECTL) delete job seed-admin -n $(NAMESPACE) --ignore-not-found 2>/dev/null || true; \
+	  $(KUBECTL) kustomize $(OVERLAY) | awk '/^---/{p=0} /kind: Job/{p=1} p' | $(KUBECTL) apply -f -; \
+	  $(KUBECTL) wait --for=condition=complete job/seed-admin -n $(NAMESPACE) --timeout=180s; \
+	  $(KUBECTL) logs -n $(NAMESPACE) -l job-name=seed-admin; \
+	} 2>&1 | tee $(call logfile,seed)
+
+# ── Comprehensive log dump ─────────────────────────────────────────────────────
+.PHONY: save-logs
+save-logs:
+	@mkdir -p $(LOGS_DIR) && { \
+	  echo "========== SAVE-LOGS $(ENV) $(TS) =========="; \
+	  echo ""; \
+	  echo "--- Docker containers ---"; \
+	  docker ps --filter "name=k3d-$(CLUSTER)" --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' 2>&1; \
+	  echo ""; \
+	  echo "--- Docker images (custom) ---"; \
+	  docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}' | grep -E '(kumbi|none)' 2>&1 || echo "(none)"; \
+	  echo ""; \
+	  echo "--- k3d clusters ---"; \
+	  k3d cluster list 2>&1; \
+	  echo ""; \
+	  echo "--- k8s nodes ---"; \
+	  $(KUBECTL) get nodes -o wide 2>&1; \
+	  echo ""; \
+	  echo "--- k8s all resources ---"; \
+	  $(KUBECTL) get all -n $(NAMESPACE) 2>&1; \
+	  echo ""; \
+	  echo "--- k8s configmaps ---"; \
+	  $(KUBECTL) get configmap -n $(NAMESPACE) -o yaml 2>&1; \
+	  echo ""; \
+	  echo "--- k8s events (recent) ---"; \
+	  $(KUBECTL) get events -n $(NAMESPACE) --sort-by='.lastTimestamp' 2>&1 | tail -30; \
+	  echo ""; \
+	  echo "--- Backend describe ---"; \
+	  $(KUBECTL) describe deployment/backend -n $(NAMESPACE) 2>&1 | head -60; \
+	  echo ""; \
+	  echo "--- Backend recent logs ---"; \
+	  $(KUBECTL) logs -n $(NAMESPACE) -l app=backend --tail=30 2>&1; \
+	  echo ""; \
+	  echo "========== END SAVE-LOGS =========="; \
+	} 2>&1 | tee $(call logfile,save-logs)
+
+# ── List built images ─────────────────────────────────────────────────────────
+.PHONY: images
+images:
+	@docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}' | grep -E '(kumbi|^REPOSITORY)'
+
+# ── Log rotation ──────────────────────────────────────────────────────────────
+.PHONY: logs-cleanup
+logs-cleanup:
+	@echo "$(INFO) Removing logs older than 30 days..."; \
+	find $(LOGS_DIR) -name '*.log' -type f -mtime +30 -delete; \
+	find $(LOGS_DIR) -name '*.log' -type f | wc -l | xargs echo "$(INFO) Remaining log files:"
 .PHONY: _install-ingress
 _install-ingress:
 	$(call log,Installing NGINX Ingress Controller...)
@@ -244,14 +506,27 @@ _install-cert-manager:
 
 # ── Remote helpers (invoke prod commands from local machine via SSH) ───────────
 # Usage: make sync
+#        make remote CMD=build ENV=prod
 #        make remote CMD=deploy ENV=prod
 #        make remote CMD=refresh ENV=prod
 #        make remote CMD=migrate ENV=prod
 .PHONY: sync
 sync:
-	$(call log,Syncing source to $(PROD_HOST):$(REMOTE_DEST)...)
-	rsync -avz --exclude='.git' --exclude='node_modules' --exclude='backend/bin' \
+	$(call log,Syncing prod code to $(PROD_HOST):$(REMOTE_DEST)...)
+	rsync -avz --delete \
+	  --exclude='.git' \
+	  --exclude='.github' \
+	  --exclude='.opencode' \
+	  --exclude='.env' \
+	  --exclude='.env.example' \
+	  --exclude='node_modules' \
+	  --exclude='backend/bin' \
+	  --exclude='infra/k3d' \
+	  --exclude='infra/k8s/overlays/dev' \
+	  --exclude='infra/k8s/overlays/test' \
+	  --exclude='infra/k8s/overlays/staging' \
 	  --exclude='infra/k8s/overlays/prod/secrets.yaml' \
+	  --exclude='logs' \
 	  ./ $(PROD_HOST):$(REMOTE_DEST)/
 
 .PHONY: remote
@@ -278,22 +553,23 @@ scale-down:
 	$(MAKE) scale ENV=$(ENV) BACKEND_REPLICAS=1 FRONTEND_REPLICAS=1
 
 # ── User management ───────────────────────────────────────────────────────────
-.PHONY: _check-env-file
-_check-env-file:
-	@[[ -f "$(ENV_FILE)" ]] || { \
-	  echo -e "\033[1;31m[error]\033[0m Missing $(ENV_FILE) — cp .env.example .env"; \
-	  exit 1; }
-
-.PHONY: seed
-seed: _check-env-file
-	cd backend && go run ./cmd/seed admin "$(SEED_ADMIN_EMAIL)" "$(SEED_ADMIN_PASSWORD)"
-
 .PHONY: create-user
-create-user: _check-env-file
+create-user: check-config
 	@[[ -n "$(NAME)" && -n "$(EMAIL)" && -n "$(PASS)" ]] || { \
 	  echo "Usage: make create-user NAME='Jane Doe' EMAIL=jane@example.com PASS=secret ROLE=admin"; \
 	  exit 1; }
-	cd backend && go run ./cmd/seed create-user "$(NAME)" "$(EMAIL)" "$(PASS)" "$(or $(ROLE),admin)"
+	$(eval PGUSER := $(shell grep 'POSTGRES_USER' $(SECRETS) | awk '{print $$2}'))
+	$(eval PGPASS := $(shell grep 'POSTGRES_PASSWORD' $(SECRETS) | awk '{print $$2}'))
+	$(eval PGDB   := $(shell grep 'POSTGRES_DB' $(SECRETS) | awk '{print $$2}'))
+	$(eval JWT    := $(shell grep 'JWT_SECRET' $(SECRETS) | awk '{print $$2}'))
+	$(eval HOST   := $(or $(POSTGRES_HOST),localhost))
+	cd backend && \
+	  POSTGRES_USER=$(PGUSER) \
+	  POSTGRES_PASSWORD=$(PGPASS) \
+	  POSTGRES_DB=$(PGDB) \
+	  POSTGRES_HOST=$(HOST) \
+	  JWT_SECRET=$(JWT) \
+	  go run ./cmd/seed create-user "$(NAME)" "$(EMAIL)" "$(PASS)" "$(or $(ROLE),admin)"
 
 # ── Docker Compose (local tooling helper) ─────────────────────────────────────
 .PHONY: compose-up compose-down compose-logs

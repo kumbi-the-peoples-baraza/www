@@ -30,7 +30,7 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 		AllowCredentials: true,
 	}))
 
-	r.Static("/storage", cfg.StoragePath)
+	r.Static("/app/storage", cfg.StoragePath)
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 
 	authH := handlers.NewAuthHandler(db, cfg)

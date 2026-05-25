@@ -25,11 +25,11 @@ Go Backend (port 8080)
 |-------|-----------|----------------|
 | Kubernetes | k3d (k3s in Docker, rootless) | External cluster |
 | Ingress | Traefik (k3d built-in) | nginx or Traefik |
-| Image import | `docker save \| docker exec -i k3d-<cluster>-server-0 ctr images import -` | Registry push → pull |
+| Image import | `docker save \| docker exec -i k3d-<cluster>-server-0 ctr images import -` (avoids rootless Docker socket issue) | Registry push → pull |
 | Secrets | `infra/k8s/overlays/<env>/secrets.yaml` (gitignored) | Written by CI from GitHub secrets |
 | Namespace | `kumbi` (dev/prod), `kumbi-test` (test), `kumbi-staging` (staging) | Same |
 
-> **Rootless Docker note:** `k3d image import` requires `/var/run/docker.sock` and does not work with rootless Docker. The Makefile pipes images directly via `docker exec` into the k3d containerd socket instead.
+> **Image import:** `docker save` runs on the host and pipes directly into the k3d server's containerd via `docker exec`. This avoids the rootless Docker socket issue that `k3d image import` hits (its tools container needs `/var/run/docker.sock`). The image is tagged with both the short name and `docker.io/` prefix so kubelet always resolves it.
 
 ### Kustomize overlay structure
 
@@ -41,11 +41,36 @@ infra/
 └── k8s/
     ├── base/               # Shared: namespace, postgres, backend, frontend, ingress, seed-job
     └── overlays/
-        ├── dev/            # IfNotPresent, :dev tags, ENV=development, ns=kumbi
-        ├── test/           # IfNotPresent, :test tags, ENV=test, ns=kumbi-test
-        ├── staging/        # registry images, ENV=staging, ns=kumbi-staging
-        └── prod/           # registry images, ENV=production, ns=kumbi
+    ├── dev/            # imagePullPolicy: IfNotPresent, :dev tags, ENV=development, ns=kumbi
+    ├── test/           # imagePullPolicy: IfNotPresent, :test tags, ENV=test, ns=kumbi-test
+    ├── staging/        # imagePullPolicy: IfNotPresent, :staging tags, ENV=staging, ns=kumbi-staging
+    └── prod/           # imagePullPolicy: IfNotPresent, :prod tags, ENV=production, ns=kumbi
 ```
+
+### Secrets flow
+
+Each overlay's `secrets.yaml` contains two Kubernetes Secret objects in a single file:
+
+```
+secrets.yaml
+  ├── backend-secret (stringData)
+  │     DATABASE_URL        ← computed by scripts/generate-secrets.sh
+  │     JWT_SECRET          from POSTGRES_* in postgres-secret
+  │     ALLOW_ORIGIN
+  │     SEED_ADMIN_EMAIL
+  │     SEED_ADMIN_PASSWORD
+  │     SMTP_HOST/PORT/USER/PASS
+  │     WHATSAPP_WEBHOOK_URL
+  │
+  └── postgres-secret (stringData)
+        POSTGRES_USER       ← you edit these
+        POSTGRES_DB
+        POSTGRES_PASSWORD
+```
+
+Before every deploy, `scripts/generate-secrets.sh` reads the three `POSTGRES_*` values from `postgres-secret`, computes `DATABASE_URL`, and inserts/updates it in `backend-secret`. This runs automatically via `make check-config` (a prerequisite of `deploy`, `refresh`, `seed`, etc.).
+
+The Go backend reads `DATABASE_URL` from the environment (set via `backend-secret`'s `envFrom` in k8s), falling back to compiling from `POSTGRES_USER`/`DB`/`PASSWORD`/`HOST`/`PORT` for local dev and docker-compose.
 
 ## Frontend
 

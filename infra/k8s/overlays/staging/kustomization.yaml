@@ -1,21 +1,15 @@
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
-resources:
-  - ../../base
-  - secrets.yaml
-
+resources: [../../base, secrets.yaml]
 namespace: kumbi-staging
-
 images:
   - name: kumbi/backend
-    newName: ${REGISTRY}/kumbi/backend
-    newTag: ${TAG}
+    newName: kumbi/backend
+    newTag: staging
   - name: kumbi/frontend
-    newName: ${REGISTRY}/kumbi/frontend
-    newTag: ${TAG}
-
+    newName: kumbi/frontend
+    newTag: staging
 patches:
   - patch: |-
       - op: replace
@@ -31,3 +25,27 @@ patches:
     target:
       kind: ConfigMap
       name: backend-config
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: backend
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: frontend
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/initContainers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Job
+      name: seed-admin

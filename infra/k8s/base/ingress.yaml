@@ -16,7 +16,7 @@ spec:
                 name: backend
                 port:
                   number: 8080
-          - path: /storage
+          - path: /app/storage
             pathType: Prefix
             backend:
               service:

@@ -13,7 +13,9 @@ node_modules/
 # Storage
 storage/
 
-# Logs
+# Logs — capture everything
+logs/*
+!logs/.gitkeep
 *.log
 
 # OS
