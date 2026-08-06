@@ -115,10 +115,8 @@ IMG ?= all
 
 # ── Per-environment config ────────────────────────────────────────────────────
 # Cluster is named kumbi-$ENV so it coexists with other clusters on the host.
-# CLUSTER   := kumbi-$(ENV)
-CLUSTER   := kumbi
-#NAMESPACE := kumbi-$(ENV)
-NAMESPACE := kumbi
+CLUSTER   := kumbi-$(ENV)
+NAMESPACE := kumbi-$(ENV)
 IMG_TAG   := $(ENV)
 OVERLAY   := infra/k8s/overlays/$(ENV)
 SECRETS   := $(OVERLAY)/secrets.yaml
