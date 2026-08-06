@@ -7,5 +7,5 @@ resources:
   - postgres.yaml
   - backend.yaml
   - frontend.yaml
-  - ingress.yaml
+  - envoy-gateway.yaml
   - seed-job.yaml
