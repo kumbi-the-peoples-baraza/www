@@ -3,7 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: seed-admin
-  namespace: kumbi-PLACEHOLDER
+  namespace: kumbi
 spec:
   ttlSecondsAfterFinished: 300
   backoffLimit: 3

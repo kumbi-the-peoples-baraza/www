@@ -114,8 +114,10 @@ IMG ?= all
 
 # ── Per-environment config ────────────────────────────────────────────────────
 # Cluster is named kumbi-$ENV so it coexists with other clusters on the host.
-CLUSTER   := kumbi-$(ENV)
-NAMESPACE := kumbi-$(ENV)
+# CLUSTER   := kumbi-$(ENV)
+CLUSTER   := kumbi
+#NAMESPACE := kumbi-$(ENV)
+NAMESPACE := kumbi
 IMG_TAG   := $(ENV)
 OVERLAY   := infra/k8s/overlays/$(ENV)
 SECRETS   := $(OVERLAY)/secrets.yaml
@@ -130,8 +132,8 @@ ENV_DOMAIN_staging := staging.kumbike.org
 ENV_DOMAIN_prod    := kumbike.org
 
 # ── Ingress NodePort endpoints (shared scheme across all clusters) ───────────
-INGRESS_HTTP_PORT  := 30101
-INGRESS_HTTPS_PORT := 30100
+INGRESS_HTTP_PORT  := 12080
+INGRESS_HTTPS_PORT := 12443
 
 # ── Optional: open host firewall for 80/443 (off by default — destructive
 # on shared hosts). Set SETUP_FIREWALL=1 to enable. ───────────────────────

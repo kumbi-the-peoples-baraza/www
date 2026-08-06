@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: kumbi-PLACEHOLDER
+  namespace: kumbi
 spec:
   replicas: 1
   selector:
@@ -30,7 +30,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: kumbi-PLACEHOLDER
+  namespace: kumbi
 spec:
   selector:
     app: frontend
