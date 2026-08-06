@@ -19,7 +19,8 @@ SHELL := /usr/bin/env bash
 
 # Privileged k3s mode (rootful instead of rootless).
 # Set PRIVILEGED=true when k3s is installed with root privileges (systemd).
-PRIVILEGED ?= false
+# Default to privileged for containerized environments.
+PRIVILEGED ?= true
 
 # ── Envoy Gateway ────────────────────────────────────────────────────────────────
 # Set FRONT_DOOR=true to install Envoy Gateway (used for prod GCP Load Balancer).
