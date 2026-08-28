@@ -24,7 +24,7 @@ export default function LoginOverlay({ open, onClose }: Props) {
     resolver: zodResolver(schema),
   })
   const mutation = useMutation({
-    mutationFn: (d: FormData) => authApi.login(d.email, d.password),
+    mutationFn: (d: FormData) => authApi.login({ email: d.email, password: d.password }),
     onSuccess: (res) => { setAuth(res.data.user, res.data.token); onClose(); navigate('/cms') },
   })
 

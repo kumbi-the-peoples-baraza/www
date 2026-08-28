@@ -1,0 +1,19 @@
+---
+# Static StorageClasses backing the hostPath PVs (persistent-volumes.yaml.tpl).
+# Required for the PVCs in postgres.yaml/backend.yaml to bind: a PV/PVC pair
+# referencing a StorageClass that does not exist stays Pending forever.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kumbi-postgres
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kumbi-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+reclaimPolicy: Retain

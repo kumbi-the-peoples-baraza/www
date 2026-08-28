@@ -23,10 +23,19 @@ api.interceptors.response.use(
 
 // Auth
 export const authApi = {
-  login: (email: string, password: string) =>
-    api.post('/auth/login', { email, password }),
+  login: (data: { email: string; password: string; cf_turnstile_response?: string; remember_me?: boolean; device_fingerprint?: string }) =>
+    api.post('/auth/login', data),
+  verifyOtp: (data: { email: string; otp: string; remember_me?: boolean }) =>
+    api.post('/auth/verify-otp', data),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  verifyResetOtp: (data: { email: string; otp: string }) => api.post('/auth/verify-reset-otp', data),
+  verifyReset: (token: string) => api.get(`/auth/verify-reset/${token}`),
+  resetPassword: (data: { token: string; password: string }) => api.post('/auth/reset-password', data),
+  setPassword: (data: { token: string; password: string }) => api.post('/auth/set-password', data),
+  captchaConfig: () => api.get('/auth/captcha-config'),
+  turnstileConfig: () => api.get('/auth/captcha-config'),
 }
 
 // Pages
@@ -114,9 +123,16 @@ export const blogApi = {
 export const peopleApi = {
   list: () => api.get('/people'),
   listAll: () => api.get('/people/all'),
+  byRole: (role: string) => api.get(`/people?role=${role}`),
   create: (data: unknown) => api.post('/people', data),
   update: (id: string, data: unknown) => api.put(`/people/${id}`, data),
   delete: (id: string) => api.delete(`/people/${id}`),
+}
+
+// Authors (searchable, create-if-not-found)
+export const authorsApi = {
+  search: (q: string) => api.get(`/authors?q=${encodeURIComponent(q)}`),
+  get: (id: string) => api.get(`/authors/${id}`),
 }
 
 // Media gallery
@@ -148,4 +164,20 @@ export const dashboardApi = {
 export const appearanceApi = {
   get: () => api.get('/appearance'),
   update: (data: unknown) => api.put('/appearance', data),
+}
+
+// Security (admin only)
+export const securityApi = {
+  getSessions: () => api.get('/security/sessions'),
+  getUserSessions: (id: string) => api.get(`/security/sessions/${id}`),
+  getSuspiciousLogins: () => api.get('/security/suspicious-logins'),
+  getLoginAttempts: () => api.get('/security/login-attempts'),
+  getSecurityEvents: () => api.get('/security/events'),
+  getLockedUsers: () => api.get('/security/locked-users'),
+  getOTPStatus: () => api.get('/security/otp-status'),
+  unlockAccount: (id: string) => api.post(`/security/unlock/${id}`),
+  blockIp: (data: { ip: string; reason?: string }) => api.post('/security/block-ip', data),
+  blockDevice: (data: { fingerprint: string; reason?: string }) => api.post('/security/block-device', data),
+  getBlockedIps: () => api.get('/security/blocked-ips'),
+  unblockIp: (id: string) => api.delete(`/security/unblock-ip/${id}`),
 }

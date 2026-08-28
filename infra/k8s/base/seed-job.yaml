@@ -16,7 +16,7 @@ spec:
           command:
             - sh
             - -c
-            - until pg_isready -h postgres -U $POSTGRES_USER; do echo "waiting for
+            - until pg_isready -h postgres -U $POSTGRES_USER -d $POSTGRES_DB; do echo "waiting for
               postgres..."; sleep 2; done
           envFrom:
             - secretRef:

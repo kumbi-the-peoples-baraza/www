@@ -3,6 +3,8 @@ package handlers
 import (
 	"net/http"
 
+	sanitizepkg "kumbi/pkg/sanitize"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -77,6 +79,8 @@ func (h *PagesHandler) Create(c *gin.Context) {
 	}
 	if req.Status == "" { req.Status = "draft" }
 	if req.DisplayMode == "" { req.DisplayMode = "full" }
+	req.Title = sanitizepkg.HTML(req.Title)
+	req.Description = sanitizepkg.NormalizeContent(req.Description)
 
 	var id string
 	err := h.db.QueryRow(c,
@@ -102,6 +106,14 @@ func (h *PagesHandler) Update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	if req.Title != nil {
+		s := sanitizepkg.HTML(*req.Title)
+		req.Title = &s
+	}
+	if req.Description != nil {
+		s := sanitizepkg.NormalizeContent(*req.Description)
+		req.Description = &s
 	}
 	_, err := h.db.Exec(c,
 		`UPDATE pages SET title=COALESCE($1,title), description=COALESCE($2,description), status=COALESCE($3,status), display_mode=COALESCE($4,display_mode), "order"=COALESCE($5,"order"), updated_at=NOW() WHERE id=$6`,

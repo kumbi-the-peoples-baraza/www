@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Shield, Zap, Globe, Vote, Star } from 'lucide-react'
 import PageHero from '@/components/ui/PageHero'
+import { SafeHtml } from '@/components/ui/SafeHtml'
 import { useConfig } from '@/hooks/useConfig'
 
 const FEATURE_ICONS: Record<string, React.ElementType> = {
@@ -42,7 +43,10 @@ export default function KumbiVote() {
           })}
         </div>
         <div className="glass-card p-8 text-center">
-          <p className="text-muted-foreground">KumbiVote is currently in development. Full platform details will be published here soon.</p>
+          {cfg.pages.vote.content
+            ? <SafeHtml html={cfg.pages.vote.content} className="rich-content text-muted-foreground" />
+            : <p className="text-muted-foreground">KumbiVote is currently in development. Full platform details will be published here soon.</p>
+          }
         </div>
       </div>
     </>

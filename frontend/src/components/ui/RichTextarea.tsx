@@ -2,37 +2,93 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Underline from '@tiptap/extension-underline'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import DOMPurify from 'dompurify'
+
+// Turndown for HTML -> Markdown conversion (lazy)
+let turndownInstance: any = null
+function getTurndown() {
+  if (turndownInstance) return turndownInstance
+  // @ts-ignore
+  const TurndownService = require('turndown')
+  const svc = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
+  // Remove script/style before conversion
+  turndownInstance = svc
+  return svc
+}
 
 interface Props {
   onChange: (val: string) => void
   placeholder?: string
   className?: string
   initialContent?: string
+  minHeight?: string
 }
 
-export default function RichTextarea({ onChange, placeholder, className, initialContent }: Props) {
+export default function RichTextarea({ onChange, placeholder, className, initialContent, minHeight }: Props) {
+  // If initialContent looks like markdown, convert to HTML for TipTap
+  const initialHtml = useMemo(() => {
+    if (!initialContent) return ''
+    // Heuristic: if it has markdown sigils and no HTML block tags, render via simple markdown->html pre-pass
+    const hasHtml = /<\s*(p|h[1-6]|ul|ol|li|blockquote|pre|code|a|strong|em)\b/i.test(initialContent)
+    if (!hasHtml && /(^|\n)(#{1,6}\s|[-*]\s|\d+\.\s|>\s|```)/.test(initialContent)) {
+      // Minimal inline markdown rendering for the editor initial state
+      // Let backend-normalized HTML take over on next save; this is just preview
+      let html = initialContent
+        .replace(/^###\s+(.*)$/gm, '<h3>$1</h3>')
+        .replace(/^##\s+(.*)$/gm, '<h2>$1</h2>')
+        .replace(/^#\s+(.*)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>')
+        .replace(/\n\n/g, '</p><p>')
+      if (!html.startsWith('<')) html = '<p>' + html + '</p>'
+      return html
+    }
+    return initialContent
+  }, [initialContent])
+
+  const emitMarkdown = (html: string) => {
+    // Sanitize before converting so stored value is safe
+    const clean = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['p', 'br', 'h1', 'h2', 'h3', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'hr', 'a'],
+      ALLOWED_ATTR: ['href'],
+    })
+    try {
+      const td = getTurndown()
+      const md = td.turndown(clean).trim()
+      // If turndown produces empty or overly stripped, fallback to clean html (server will normalize)
+      onChange(md || clean)
+    } catch {
+      onChange(clean)
+    }
+  }
+
   const editor = useEditor({
     extensions: [
       StarterKit,
       Underline,
       Link.configure({ openOnClick: false }),
     ],
-    content: initialContent || '',
+    content: initialHtml || '',
     editorProps: {
       attributes: {
         class: 'min-h-[160px] outline-none max-w-none px-4 py-3 rich-content',
+        ...(minHeight ? { style: `min-height: ${minHeight}` } : {}),
       },
     },
-    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    onUpdate: ({ editor }) => emitMarkdown(editor.getHTML()),
   })
 
   useEffect(() => {
-    if (editor && initialContent !== undefined && editor.getHTML() !== initialContent) {
-      editor.commands.setContent(initialContent || '')
+    if (editor && initialContent !== undefined) {
+      const html = initialHtml
+      if (editor.getHTML() !== html) {
+        editor.commands.setContent(html || '')
+      }
     }
-  }, [initialContent])
+  }, [editor, initialHtml])
 
   if (!editor) return null
 

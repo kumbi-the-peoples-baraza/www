@@ -24,12 +24,24 @@ func CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
-func GenerateToken(userID uuid.UUID, role, secret string) (string, error) {
+// Default session duration is 30 days; remember_me extends to 90 days.
+const (
+	DefaultSessionDuration = 30 * 24 * time.Hour
+	RememberMeDuration     = 90 * 24 * time.Hour
+)
+
+// GenerateToken creates a signed JWT with the given lifetime.
+// If rememberMe is true the token lasts 90 days; otherwise 30 days.
+func GenerateToken(userID uuid.UUID, role, secret string, rememberMe bool) (string, error) {
+	dur := DefaultSessionDuration
+	if rememberMe {
+		dur = RememberMeDuration
+	}
 	claims := Claims{
 		UserID: userID,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(dur)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

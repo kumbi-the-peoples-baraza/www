@@ -1,0 +1,98 @@
+- generic [active] [ref=f5e8]:
+  - generic [ref=f5e10]:
+    - complementary [ref=f5e11]:
+      - generic [ref=f5e12]:
+        - generic [ref=f5e13]: Kumbi CMS
+        - button "Collapse sidebar" [ref=f5e17] [cursor=pointer]
+      - navigation [ref=f5e20]:
+        - link "Dashboard" [ref=f5e21] [cursor=pointer]:
+          - /url: /cms
+        - link "Site Content" [ref=f5e28] [cursor=pointer]:
+          - /url: /cms/site-content
+        - link "Blog" [ref=f5e33] [cursor=pointer]:
+          - /url: /cms/blog
+        - link "Our People" [ref=f5e38] [cursor=pointer]:
+          - /url: /cms/people
+        - link "Media" [ref=f5e44] [cursor=pointer]:
+          - /url: /cms/media
+        - link "Feedback" [ref=f5e50] [cursor=pointer]:
+          - /url: /cms/forms
+        - link "Users" [ref=f5e54] [cursor=pointer]:
+          - /url: /cms/users
+        - link "Security" [ref=f5e61] [cursor=pointer]:
+          - /url: /cms/security
+        - link "Analytics" [ref=f5e65] [cursor=pointer]:
+          - /url: /cms/analytics
+      - generic [ref=f5e69]:
+        - paragraph [ref=f5e70]: Admin
+        - paragraph [ref=f5e71]: admin
+    - generic [ref=f5e72]:
+      - banner [ref=f5e73]:
+        - generic [ref=f5e74]:
+          - button "Switch to Light theme" [ref=f5e75] [cursor=pointer]
+          - button "Switch to Dim theme" [ref=f5e79] [cursor=pointer]
+          - button "Switch to Dark theme" [ref=f5e83] [cursor=pointer]
+        - button "Sign Out" [ref=f5e86] [cursor=pointer]
+      - main [ref=f5e91]:
+        - generic [ref=f5e93]:
+          - generic [ref=f5e94]:
+            - heading "Media Library" [level=1] [ref=f5e95]
+            - generic [ref=f5e96]:
+              - generic [ref=f5e97]:
+                - button "🖼 Library" [ref=f5e98] [cursor=pointer]
+                - button "⚙ Watermark" [ref=f5e99] [cursor=pointer]
+              - button "Upload" [ref=f5e100] [cursor=pointer]
+          - generic [ref=f5e104]:
+            - textbox "Search Images" [ref=f5e106]
+            - combobox [ref=f5e108]:
+              - option "Sort By" [disabled] [selected]
+              - option "Name"
+              - option "Upload date"
+              - option "Size"
+              - option "Views"
+              - option "Date taken"
+              - option "Photographer"
+            - button "By Month" [ref=f5e109] [cursor=pointer]
+            - generic [ref=f5e110]: 1 file
+          - generic [ref=f5e112] [cursor=pointer]:
+            - img "24 - From Bus" [ref=f5e113]
+            - generic [ref=f5e114]:
+              - paragraph [ref=f5e115]: 24 - From Bus
+              - paragraph [ref=f5e116]: Test
+              - generic [ref=f5e117]:
+                - generic [ref=f5e118]: Test
+                - generic [ref=f5e122]: 10 Apr 2026
+              - generic [ref=f5e123]:
+                - button "View" [ref=f5e124]
+                - button "Edit metadata" [ref=f5e128]
+                - button "Delete" [ref=f5e132]
+                - button "☆" [ref=f5e136]
+  - generic [ref=f5e138]:
+    - generic [ref=f5e139]:
+      - heading "Upload Media" [level=2] [ref=f5e140]
+      - button [ref=f5e141] [cursor=pointer]
+    - generic [ref=f5e145]:
+      - generic [ref=f5e207]:
+        - img "Preview" [ref=f5e208]
+        - button "Choose a different file" [ref=f5e209] [cursor=pointer]
+      - generic [ref=f5e151]:
+        - generic [ref=f5e152]:
+          - generic [ref=f5e153]: Name *
+          - textbox "Image name" [ref=f5e154]: test_photo_exif
+        - generic [ref=f5e155]:
+          - generic [ref=f5e156]: Caption
+          - textbox "Optional caption" [ref=f5e157]
+        - generic [ref=f5e158]:
+          - generic [ref=f5e159]: Photographer
+          - textbox "Optional" [ref=f5e160]
+        - paragraph [ref=f5e210]:
+          - text: "Date taken auto-detected from EXIF: 14 Jul 2025"
+          - generic [ref=f5e213]: GPS -2.0000, 36.0000
+      - generic [ref=f5e217] [cursor=pointer]:
+        - checkbox "Apply watermark using settings from the Watermark tab" [checked] [ref=f5e220]
+        - generic [ref=f5e221]:
+          - generic [ref=f5e222]: Apply watermark
+          - generic [ref=f5e223]: using settings from the Watermark tab
+    - generic [ref=f5e161]:
+      - button "Cancel" [ref=f5e162] [cursor=pointer]
+      - button "Upload" [ref=f5e163] [cursor=pointer]

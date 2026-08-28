@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi } from '@/api/client'
 import { useState } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { User } from '@/types'
 
@@ -9,7 +9,10 @@ const ROLES = ['admin', 'editor', 'viewer'] as const
 
 export default function Users() {
   const qc = useQueryClient()
-  const [editing, setEditing] = useState<Partial<User & { password: string }> | null>(null)
+  const [editing, setEditing] = useState<Partial<User & { password: string; confirmPassword: string }> | null>(null)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showPassword, setShowPassword] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -18,7 +21,13 @@ export default function Users() {
 
   const createMutation = useMutation({
     mutationFn: (data: unknown) => usersApi.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setEditing(null) },
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['users'] })
+      setEditing(null)
+      setNotice(res?.data?.invited
+        ? `Setup link emailed to ${editing?.email}. They set their own password via the link.`
+        : 'User created.')
+    },
   })
 
   const updateMutation = useMutation({
@@ -34,13 +43,29 @@ export default function Users() {
   const toggleActive = (u: User) =>
     updateMutation.mutate({ id: u.id, data: { active: !u.active } })
 
+  const validate = (): boolean => {
+    const e: Record<string, string> = {}
+    if (!editing?.name?.trim()) e.name = 'Name is required'
+    if (!editing?.id && !editing?.email?.trim()) e.email = 'Email is required'
+    if (!editing?.id && !editing?.email?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) e.email = 'Invalid email'
+    // On create, a blank password is auto-generated server-side (8 chars,
+    // force-reset on first login). Only validate when the admin typed one.
+    if (!editing?.id && editing?.password && editing.password.length < 10) e.password = 'Must be at least 10 characters'
+    if (!editing?.id && editing?.password && editing.password !== editing.confirmPassword) e.confirmPassword = 'Passwords do not match'
+    if (editing?.id && editing?.password && editing.password.length > 0 && editing.password.length < 10) e.password = 'Must be at least 10 characters'
+    if (editing?.id && editing?.password && editing.password !== editing.confirmPassword) e.confirmPassword = 'Passwords do not match'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
   const save = () => {
-    if (!editing) return
+    if (!editing || !validate()) return
     if (editing.id) {
       const { id, password, name, role, active } = editing
       updateMutation.mutate({ id: id!, data: { name, role, active, ...(password ? { password } : {}) } })
     } else {
-      createMutation.mutate(editing)
+      const { confirmPassword, ...data } = editing
+      createMutation.mutate(data)
     }
   }
 
@@ -48,13 +73,20 @@ export default function Users() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Users</h1>
-        <button
-          onClick={() => setEditing({ name: '', email: '', password: '', role: 'viewer' })}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> New User
-        </button>
-      </div>
+          <button
+            onClick={() => { setEditing({ name: '', email: '', password: '', confirmPassword: '', role: 'viewer' }); setErrors({}); setShowPassword(false) }}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> New User
+          </button>
+        </div>
+
+        {notice && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-green-500/10 text-green-600 text-sm mb-6">
+            <span>{notice}</span>
+            <button onClick={() => setNotice(null)} className="ml-auto text-green-600/70 hover:text-green-600">✕</button>
+          </div>
+        )}
 
       {editing && (
         <div className="glass-card p-6 mb-6">
@@ -63,16 +95,49 @@ export default function Users() {
             <div>
               <label className="text-sm font-medium mb-1.5 block">Name</label>
               <input value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="input-field" />
+              {errors.name && <p className="text-sm text-destructive mt-1">{errors.name}</p>}
             </div>
             {!editing.id && (
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Email</label>
                 <input type="email" value={editing.email || ''} onChange={(e) => setEditing({ ...editing, email: e.target.value })} className="input-field" />
+                {errors.email && <p className="text-sm text-destructive mt-1">{errors.email}</p>}
               </div>
             )}
             <div>
-              <label className="text-sm font-medium mb-1.5 block">{editing.id ? 'New Password (leave blank to keep)' : 'Password'}</label>
-              <input type="password" value={editing.password || ''} onChange={(e) => setEditing({ ...editing, password: e.target.value })} className="input-field" />
+              <label className="text-sm font-medium mb-1.5 block">{editing.id ? 'New Password (leave blank to keep)' : 'Password (optional — a setup link is emailed if blank)'}</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={editing.password || ''}
+                  onChange={(e) => setEditing({ ...editing, password: e.target.value })}
+                  className="input-field pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {errors.password && <p className="text-sm text-destructive mt-1">{errors.password}</p>}
+              {!editing?.id && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Left blank, a secure setup link is emailed to the user — they set their own password via the link. No password is emailed.
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">{editing.id ? 'Confirm New Password' : 'Confirm Password'}</label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={editing.confirmPassword || ''}
+                onChange={(e) => setEditing({ ...editing, confirmPassword: e.target.value })}
+                className="input-field"
+              />
+              {errors.confirmPassword && <p className="text-sm text-destructive mt-1">{errors.confirmPassword}</p>}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Role</label>
@@ -119,7 +184,7 @@ export default function Users() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button onClick={() => setEditing(u)} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setEditing({ ...u, password: '', confirmPassword: '' }); setShowPassword(false) }} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
                       <button onClick={() => { if (confirm('Delete user?')) deleteMutation.mutate(u.id) }} className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </td>

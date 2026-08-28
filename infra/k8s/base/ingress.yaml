@@ -1,0 +1,61 @@
+---
+# HTTPRoutes for Kumbi — attach to shared Gateway in cilium-gateway namespace.
+# The shared Gateway (cluster-gateway) binds hostPort 80/443 and terminates TLS.
+# Deploy the shared Gateway once: kubectl apply -f infra/platform/gateway.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kumbi-httproute
+  namespace: kumbi
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: cluster-gateway
+      namespace: cilium-gateway
+  hostnames:
+    - "${DOMAIN}"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: backend
+          port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /app/storage
+      backendRefs:
+        - name: backend
+          port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-httproute
+  namespace: kumbi
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: cluster-gateway
+      namespace: cilium-gateway
+  hostnames:
+    - "api.${DOMAIN}"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: backend
+          port: 8080

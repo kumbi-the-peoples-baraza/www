@@ -1,0 +1,94 @@
+- generic [ref=f5e10]:
+  - complementary [ref=f5e11]:
+    - generic [ref=f5e12]:
+      - generic [ref=f5e13]: Kumbi CMS
+      - button "Collapse sidebar" [ref=f5e17] [cursor=pointer]
+    - navigation [ref=f5e20]:
+      - link "Dashboard" [ref=f5e21] [cursor=pointer]:
+        - /url: /cms
+      - link "Site Content" [ref=f5e28] [cursor=pointer]:
+        - /url: /cms/site-content
+      - link "Blog" [ref=f5e33] [cursor=pointer]:
+        - /url: /cms/blog
+      - link "Our People" [ref=f5e38] [cursor=pointer]:
+        - /url: /cms/people
+      - link "Media" [ref=f5e44] [cursor=pointer]:
+        - /url: /cms/media
+      - link "Feedback" [ref=f5e50] [cursor=pointer]:
+        - /url: /cms/forms
+      - link "Users" [ref=f5e54] [cursor=pointer]:
+        - /url: /cms/users
+      - link "Security" [ref=f5e61] [cursor=pointer]:
+        - /url: /cms/security
+      - link "Analytics" [ref=f5e65] [cursor=pointer]:
+        - /url: /cms/analytics
+    - generic [ref=f5e69]:
+      - paragraph [ref=f5e70]: Admin
+      - paragraph [ref=f5e71]: admin
+  - generic [ref=f5e72]:
+    - banner [ref=f5e73]:
+      - generic [ref=f5e74]:
+        - button "Switch to Light theme" [ref=f5e75] [cursor=pointer]
+        - button "Switch to Dim theme" [ref=f5e79] [cursor=pointer]
+        - button "Switch to Dark theme" [ref=f5e83] [cursor=pointer]
+      - button "Sign Out" [ref=f5e86] [cursor=pointer]
+    - main [ref=f5e91]:
+      - generic [ref=f5e93]:
+        - generic [ref=f5e94]:
+          - heading "Media Library" [level=1] [ref=f5e95]
+          - generic [ref=f5e97]:
+            - button "🖼 Library" [ref=f5e98] [cursor=pointer]
+            - button "⚙ Watermark" [active] [ref=f5e99] [cursor=pointer]
+        - generic [ref=f5e355]:
+          - generic [ref=f5e356]:
+            - heading "Watermark Preferences" [level=2] [ref=f5e357]
+            - generic [ref=f5e361] [cursor=pointer]:
+              - generic [ref=f5e362]: Enable
+              - checkbox "Enable" [checked] [ref=f5e363]
+          - generic [ref=f5e364]:
+            - generic [ref=f5e365]:
+              - generic [ref=f5e366]: Text
+              - textbox "© Your Name" [ref=f5e367]: © Kumbi | The People's Baraza
+            - generic [ref=f5e368]:
+              - generic [ref=f5e369]: Font
+              - textbox "Inter, sans-serif" [ref=f5e370]
+            - generic [ref=f5e371]:
+              - generic [ref=f5e372]: Size (px)
+              - spinbutton [ref=f5e373]: "55"
+            - generic [ref=f5e374]:
+              - generic [ref=f5e375]: Weight
+              - combobox [ref=f5e376]:
+                - option "normal"
+                - option "bold" [selected]
+                - option "600"
+                - option "700"
+                - option "800"
+                - option "900"
+            - generic [ref=f5e377]:
+              - generic [ref=f5e378]: Style
+              - combobox [ref=f5e379]:
+                - option "normal" [selected]
+                - option "italic"
+                - option "oblique"
+            - generic [ref=f5e380]:
+              - generic [ref=f5e381]: Colour
+              - generic [ref=f5e382]:
+                - textbox [ref=f5e383] [cursor=pointer]: "#4a9ef7"
+                - textbox [ref=f5e384]: "#4a9ef7"
+            - generic [ref=f5e385]:
+              - generic [ref=f5e386]: Opacity (80%)
+              - slider [ref=f5e387]: "0.8"
+            - generic [ref=f5e388]:
+              - generic [ref=f5e389]: Position
+              - combobox [ref=f5e390]:
+                - option "top left"
+                - option "top center"
+                - option "top right"
+                - option "center"
+                - option "bottom left"
+                - option "bottom center" [selected]
+                - option "bottom right"
+          - generic [ref=f5e391]:
+            - generic [ref=f5e392]: Preview area
+            - generic: © Kumbi | The People's Baraza
+          - button "Save Watermark Settings" [ref=f5e393] [cursor=pointer]

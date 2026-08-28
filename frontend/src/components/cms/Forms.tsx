@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { formsApi } from '@/api/client'
-import { Download, FileText, Eye, X } from 'lucide-react'
+import { Download, FileText, Eye, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { downloadBlob } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useState } from 'react'
@@ -14,7 +14,8 @@ const FORM_LABELS: Record<string, string> = {
   volunteer: 'Volunteer',
 }
 
-const HIDDEN_KEYS = new Set(['_hp', '_captcha_token', '_captcha_answer'])
+const HIDDEN_KEYS = new Set(['_hp', '_captcha_token', '_captcha_answer', 'cf_turnstile_response', '_cf_turnstile_response'])
+const ITEMS_PER_PAGE = 20
 
 function SubmissionView({ submission, onClose }: { submission: { id: string; data: Record<string, unknown>; createdAt: string; formType: string } | null; onClose: () => void }) {
   useEffect(() => {
@@ -142,11 +143,18 @@ function SubmissionView({ submission, onClose }: { submission: { id: string; dat
 export default function Forms() {
   const [activeForm, setActiveForm] = useState<typeof FORM_TYPES[number]>('contact')
   const [viewing, setViewing] = useState<{ id: string; data: Record<string, unknown>; createdAt: string; formType: string } | null>(null)
+  const [page, setPage] = useState(1)
 
   const { data: submissions = [], isLoading } = useQuery({
     queryKey: ['form-submissions', activeForm],
     queryFn: () => formsApi.listSubmissions(activeForm).then((r) => r.data),
   })
+
+  useEffect(() => { setPage(1) }, [activeForm])
+
+  const totalPages = Math.max(1, Math.ceil(submissions.length / ITEMS_PER_PAGE))
+  const safePage = Math.min(page, totalPages)
+  const paged = submissions.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE)
 
   const exportCsv = async () => {
     const res = await formsApi.exportCsv(activeForm)
@@ -209,7 +217,7 @@ export default function Forms() {
                 </tr>
               </thead>
               <tbody>
-                {submissions.map((s: { id: string; data: Record<string, unknown>; createdAt: string; formType: string }) => (
+                {paged.map((s: { id: string; data: Record<string, unknown>; createdAt: string; formType: string }) => (
                   <tr key={s.id} className="border-b border-white/5 hover:bg-muted/30">
                     {Object.entries(s.data).filter(([key]) => !HIDDEN_KEYS.has(key)).map(([, v], i) => (
                       <td key={i} className="px-4 py-3 text-muted-foreground max-w-[200px] truncate">{String(v)}</td>
@@ -226,6 +234,28 @@ export default function Forms() {
                 ))}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 p-4 border-t border-white/10">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-sm font-semibold text-muted-foreground">
+                  {safePage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Heart, Code, Megaphone, Handshake, Star, ArrowRight } from 'lucide-react'
 import { useVolunteerStore } from '@/store/volunteerStore'
 import PageHero from '@/components/ui/PageHero'
+import { SafeHtml } from '@/components/ui/SafeHtml'
 import { useConfig } from '@/hooks/useConfig'
 
 const ROLE_ICONS: Record<string, React.ElementType> = {
@@ -31,7 +32,7 @@ export default function Volunteer() {
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
             className="max-w-3xl mx-auto mb-14 rich-content text-muted-foreground leading-relaxed space-y-4">
             {contentParagraphs.map((p, i) => (
-              <p key={i} dangerouslySetInnerHTML={{ __html: p }} />
+              <SafeHtml key={i} html={p} as="p" />
             ))}
           </motion.div>
         )}

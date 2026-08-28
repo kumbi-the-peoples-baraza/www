@@ -1,0 +1,14 @@
+- generic [ref=f3e4]:
+  - generic [ref=f3e5]:
+    - generic [ref=f3e6]: Kumbi CMS
+    - paragraph [ref=f3e10]: Enter the code sent to your email
+  - generic [ref=f3e11]:
+    - generic [ref=f3e33]:
+      - text: New device detected. Check
+      - strong [ref=f3e34]: root@kumbike.org
+      - text: for a 6-digit code.
+    - generic [ref=f3e15]:
+      - generic [ref=f3e16]: One-Time Password
+      - textbox "000000" [ref=f3e35]
+    - button "Verify OTP" [ref=f3e36] [cursor=pointer]
+    - button "Back to login" [ref=f3e40] [cursor=pointer]

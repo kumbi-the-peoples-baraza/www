@@ -120,6 +120,7 @@ function HeroSection({ cfg, set }: { cfg: SiteConfig; set: ReturnType<typeof use
   return (
     <div className="glass-card p-6 flex flex-col gap-5">
       <Field label="Heading"><TextInput value={cfg.hero.heading} onChange={v => set('hero')({ heading: v })} /></Field>
+      <Field label="Badge (pill above heading)"><TextInput value={cfg.hero.badge} onChange={v => set('hero')({ badge: v })} placeholder="e.g. Kenya · Community · Impact" /></Field>
       <Field label="Subheading">
         <RichTextarea key="hero-sub" initialContent={cfg.hero.subheading} onChange={v => set('hero')({ subheading: v })} placeholder="Hero subheading…" />
       </Field>
@@ -174,7 +175,7 @@ function VolunteerSection({ cfg, set }: { cfg: SiteConfig; set: ReturnType<typeo
   )
 }
 
-function FooterSection({ cfg, set }: { cfg: SiteConfig; set: ReturnType<typeof useSectionSet> }) {
+function FooterSection({ cfg, set, setTop }: { cfg: SiteConfig; set: ReturnType<typeof useSectionSet>; setTop: (v: string) => void }) {
   return (
     <div className="glass-card p-6 flex flex-col gap-5">
       <Field label="About Text">
@@ -183,10 +184,25 @@ function FooterSection({ cfg, set }: { cfg: SiteConfig; set: ReturnType<typeof u
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Street Address"><TextInput value={cfg.footer.address} onChange={v => set('footer')({ address: v })} /></Field>
         <Field label="City / Country"><TextInput value={cfg.footer.city} onChange={v => set('footer')({ city: v })} /></Field>
-        <Field label="Email"><TextInput value={cfg.footer.email} onChange={v => set('footer')({ email: v })} /></Field>
-        <Field label="Phone"><TextInput value={cfg.footer.phone} onChange={v => set('footer')({ phone: v })} /></Field>
+        <Field label="Email">
+          <TextInput value={cfg.footer.email} onChange={v => set('footer')({ email: v })} />
+          {cfg.footer.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cfg.footer.email) && (
+            <p className="text-xs text-destructive mt-1">Enter a valid email address.</p>
+          )}
+        </Field>
+        <Field label="Phone">
+          <TextInput value={cfg.footer.phone} onChange={v => set('footer')({ phone: v })} />
+          {!cfg.footer.phone.trim() && <p className="text-xs text-destructive mt-1">Phone is required.</p>}
+        </Field>
       </div>
       <Field label="Copyright Line"><TextInput value={cfg.footer.copyright} onChange={v => set('footer')({ copyright: v })} /></Field>
+      <Field label="Correspondence Email Address">
+        <TextInput
+          value={cfg.correspondenceEmail || ''}
+          onChange={v => setTop(v)}
+          placeholder="ops@kumbike.org"
+        />
+      </Field>
     </div>
   )
 }
@@ -300,8 +316,9 @@ export default function SiteContent() {
     nav:       { ...DEFAULTS.nav,       ...(raw.nav       || {}) },
     hero:      { ...DEFAULTS.hero,      ...(raw.hero      || {}) },
     projects:  { ...DEFAULTS.projects,  ...(raw.projects  || {}), items: raw.projects?.items || DEFAULTS.projects.items },
-    volunteer: { ...DEFAULTS.volunteer, ...(raw.volunteer || {}) },
-    footer:    { ...DEFAULTS.footer,    ...(raw.footer    || {}) },
+      volunteer: { ...DEFAULTS.volunteer, ...(raw.volunteer || {}) },
+      footer:    { ...DEFAULTS.footer,    ...(raw.footer    || {}) },
+      correspondenceEmail: raw.correspondenceEmail || DEFAULTS.correspondenceEmail || '',
     pages: {
       about:    { ...DEFAULTS.pages.about,    ...(raw.pages?.about    || {}), values:   raw.pages?.about?.values    || DEFAULTS.pages.about.values },
       projects: { ...DEFAULTS.pages.projects, ...(raw.pages?.projects || {}) },
@@ -352,7 +369,7 @@ export default function SiteContent() {
     <div className="relative min-h-[calc(100vh-12rem)]">
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-black">Site Content <span className="text-muted-foreground font-semibold">/ {SECTIONS.find((s): s is { id: string; title: string } => 'id' in s && s.id === activeSection)?.title ?? activeSection}</span></h1>
+        <h1 className="text-2xl font-black">Site Settings <span className="text-muted-foreground font-semibold">/ {SECTIONS.find((s): s is { id: string; title: string } => 'id' in s && s.id === activeSection)?.title ?? activeSection}</span></h1>
       </div>
 
       {/* ── Content area ── */}
@@ -362,7 +379,7 @@ export default function SiteContent() {
           {activeSection === 'hero' && <HeroSection cfg={cfg} set={set} />}
           {activeSection === 'projects' && <ProjectsSection cfg={cfg} set={set} setProjectItem={setProjectItem} onAddProject={onAddProject} onDeleteProject={onDeleteProject} />}
           {activeSection === 'volunteer' && <VolunteerSection cfg={cfg} set={set} />}
-          {activeSection === 'footer' && <FooterSection cfg={cfg} set={set} />}
+          {activeSection === 'footer' && <FooterSection cfg={cfg} set={set} setTop={(v) => setDraft(d => d ? { ...d, correspondenceEmail: v } : d)} />}
           {activeSection === 'footer-social' && <SocialLinksSection cfg={cfg} set={set} />}
           {activeSection === 'about' && <PageSection cfg={cfg} page="about" setPage={setPage} />}
           {activeSection === 'about-values' && <AboutValuesSection cfg={cfg} setPage={setPage} />}

@@ -25,10 +25,11 @@ export interface WatermarkConfig {
 
 export interface SiteConfig {
   nav: { brand: string; tagline: string }
-  hero: { heading: string; subheading: string; image: string; ctaPrimary: string; ctaSecondary: string }
+  hero: { heading: string; subheading: string; image: string; ctaPrimary: string; ctaSecondary: string; badge: string }
   projects: { heading: string; subheading: string; tagline: string; items: ProjectItem[]; backgroundImage: string }
   volunteer: { heading: string; subheading: string; cta: string; backgroundImage: string }
   footer: { about: string; address: string; city: string; email: string; phone: string; copyright: string; twitter: string; instagram: string; facebook: string }
+  correspondenceEmail?: string
   pages: {
     about:    { heading: string; subheading: string; heroImage: string; content: string; heroTag: string; values: ContentCard[] }
     projects: { heading: string; subheading: string; heroImage: string; content: string; heroTag: string }
@@ -47,11 +48,12 @@ const WM_DEFAULTS: WatermarkConfig = {
 }
 
 export const DEFAULTS: SiteConfig = {
-  nav: { brand: 'Kumbi', tagline: "The People's Baraza" },
+  nav: { brand: 'Kumbi', tagline: 'The People\'s Baraza' },
   hero: {
     heading: 'Building a Better Community Together',
     subheading: 'Kumbi drives meaningful change across Kenya through data, democracy, and dedicated social work.',
     image: '', ctaPrimary: 'Explore Projects', ctaSecondary: 'Learn More',
+    badge: 'Kenya · Community · Impact',
   },
   projects: {
     heading: 'Our Projects',
@@ -74,10 +76,11 @@ export const DEFAULTS: SiteConfig = {
   footer: {
     about: 'Driving meaningful change across Kenya through data, democracy, and dedicated social work.',
     address: 'Ngong Road, Kilimani', city: 'Nairobi, Kenya',
-    email: 'hello@kumbi.org', phone: '+254 700 000 000',
-    copyright: '© 2026 The People\'s Baraza. All Rights Reserved.',
+    email: 'hello@kumbi.org', phone: '+254 702 550 800',
+    copyright: '© 2026 Kumbi. All Rights Reserved.',
     twitter: '', instagram: '', facebook: '',
   },
+  correspondenceEmail: '',
   pages: {
     about:    { heading: 'About Kumbi', subheading: 'Our story, mission, and the people behind the movement.', heroImage: '', content: '', heroTag: 'Who We Are',
       values: [

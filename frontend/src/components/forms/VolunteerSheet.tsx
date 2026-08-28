@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { useVolunteerStore } from '@/store/volunteerStore'
 import { formsApi } from '@/api/client'
 import OverlayPanel from '@/components/ui/OverlayPanel'
-import CaptchaField from '@/components/ui/CaptchaField'
+import TurnstileField from '@/components/ui/TurnstileField'
 
 const schema = z.object({
   firstName: z.string().min(1, 'Required'),
@@ -16,8 +16,7 @@ const schema = z.object({
   phone: z.string().min(7, 'Invalid number'),
   skills: z.string().min(10, 'Please describe what you can do'),
   _hp: z.string().max(0, 'Bot detected'),
-  _captcha_token: z.string().min(1, 'Captcha required'),
-  _captcha_answer: z.string().min(1, 'Please answer the captcha'),
+  cf_turnstile_response: z.string().min(1, 'Please verify you are human'),
 })
 type FormData = z.infer<typeof schema>
 
@@ -47,7 +46,6 @@ export default function VolunteerSheet() {
         <form onSubmit={handleSubmit(d => mutation.mutate(d))} className="overlay-form">
           <input {...register('_hp')} type="text" tabIndex={-1} autoComplete="off"
             style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
-          <input type="hidden" {...register('_captcha_token')} />
 
           <Field label="First Name" error={errors.firstName?.message}>
             <input {...register('firstName')} className="input-field" placeholder="Jane" />
@@ -64,11 +62,8 @@ export default function VolunteerSheet() {
           <Field label="What can you do?" error={errors.skills?.message}>
             <textarea {...register('skills')} rows={5} className="input-field resize-none" placeholder="Tell us about your skills, availability, and how you'd like to contribute" />
           </Field>
-          <CaptchaField
-            setToken={t => setValue('_captcha_token', t)}
-            onAnswerChange={v => setValue('_captcha_answer', v)}
-            error={errors._captcha_answer?.message}
-          />
+          <TurnstileField onVerify={t => setValue('cf_turnstile_response', t)} />
+          {errors.cf_turnstile_response && <p style={{ color: 'hsl(var(--destructive))', fontWeight: 600, fontSize: '0.9rem' }}>{errors.cf_turnstile_response.message}</p>}
           <button type="submit" disabled={mutation.isPending} className="btn-primary" style={{ width: '100%' }}>
             {mutation.isPending ? 'Submitting…' : 'Register to Volunteer'}
           </button>

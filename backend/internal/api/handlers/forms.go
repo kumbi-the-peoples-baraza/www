@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"kumbi/internal/auth"
 	"kumbi/internal/config"
 	"kumbi/internal/services"
 	"math/rand"
@@ -25,10 +26,12 @@ type FormsHandler struct {
 	db       *pgxpool.Pool
 	cfg      *config.Config
 	notifier *services.Notifier
+	emailSvc *services.EmailService
+	geoSvc   *services.GeoService
 }
 
-func NewFormsHandler(db *pgxpool.Pool, cfg *config.Config) *FormsHandler {
-	return &FormsHandler{db: db, cfg: cfg, notifier: services.NewNotifier(cfg)}
+func NewFormsHandler(db *pgxpool.Pool, cfg *config.Config, emailSvc *services.EmailService, geoSvc *services.GeoService) *FormsHandler {
+	return &FormsHandler{db: db, cfg: cfg, notifier: services.NewNotifier(cfg), emailSvc: emailSvc, geoSvc: geoSvc}
 }
 
 // ── Captcha ──────────────────────────────────────────────────────────────────
@@ -100,11 +103,38 @@ func (h *FormsHandler) Submit(formType string) gin.HandlerFunc {
 			return
 		}
 
-		// Validate captcha
-		token, _ := data["_captcha_token"].(string)
-		answer, _ := data["_captcha_answer"].(string)
-		if token == "" || !h.validateCaptcha(token, answer) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid captcha"})
+		// Validate Turnstile (preferred) or legacy math captcha fallback
+		turnstileToken, _ := data["cf_turnstile_response"].(string)
+		if turnstileToken == "" {
+			turnstileToken, _ = data["_cf_turnstile_response"].(string)
+		}
+		// Legacy fallback keys still sent by old clients
+		legacyToken, _ := data["_captcha_token"].(string)
+		legacyAnswer, _ := data["_captcha_answer"].(string)
+
+		valid := false
+		if turnstileToken != "" && h.cfg.TurnstileSecret != "" {
+			ip := c.ClientIP()
+			if fwd := c.GetHeader("X-Forwarded-For"); fwd != "" {
+				ip = strings.Split(fwd, ",")[0]
+			}
+			if auth.VerifyTurnstile(turnstileToken, strings.TrimSpace(ip), h.cfg.TurnstileSecret) {
+				valid = true
+			}
+		} else if legacyToken != "" {
+			if h.validateCaptcha(legacyToken, legacyAnswer) {
+				valid = true
+			}
+		} else {
+			// No token at all — if Turnstile is configured, require it; otherwise allow in dev without captcha
+			if h.cfg.TurnstileSecret != "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Human verification required"})
+				return
+			}
+			valid = true
+		}
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Human verification failed"})
 			return
 		}
 
@@ -121,6 +151,9 @@ func (h *FormsHandler) Submit(formType string) gin.HandlerFunc {
 		delete(data, "_hp")
 		delete(data, "_captcha_token")
 		delete(data, "_captcha_answer")
+		delete(data, "cf_turnstile_response")
+		delete(data, "_cf_turnstile_response")
+		delete(data, "cf-turnstile-response")
 
 		b, _ := json.Marshal(data)
 		_, err := h.db.Exec(
@@ -134,7 +167,35 @@ func (h *FormsHandler) Submit(formType string) gin.HandlerFunc {
 			return
 		}
 
-		go h.notifier.Notify(formType, data)
+		// Capture request metadata for the correspondence email.
+		ip := c.ClientIP()
+		if fwd := c.GetHeader("X-Forwarded-For"); fwd != "" {
+			ip = strings.Split(fwd, ",")[0]
+		}
+		ua := c.Request.UserAgent()
+		location := ""
+		if h.geoSvc != nil {
+			if g, err := h.geoSvc.Lookup(strings.TrimSpace(ip)); err == nil && g != nil {
+				location = strings.TrimSpace(strings.Trim(g.City+", ", " ") + g.Country)
+			}
+		}
+		meta := map[string]string{
+			"location":  location,
+			"ip":        strings.TrimSpace(ip),
+			"userAgent": ua,
+			"device":    parseDevice(ua),
+		}
+
+		dataCopy := make(map[string]interface{}, len(data))
+		for k, v := range data {
+			dataCopy[k] = v
+		}
+		go func() {
+			if h.emailSvc != nil {
+				_ = h.emailSvc.SendFormSubmission(formType, dataCopy, meta)
+			}
+			h.notifier.Notify(formType, dataCopy)
+		}()
 		c.JSON(http.StatusCreated, gin.H{"message": "submitted"})
 	}
 }
@@ -362,4 +423,43 @@ func titleStr(s string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+// parseDevice derives a coarse device class + OS from a User-Agent string.
+func parseDevice(ua string) string {
+	ua = strings.ToLower(ua)
+	kind := "Desktop"
+	switch {
+	case strings.Contains(ua, "iphone"), strings.Contains(ua, "android") && !strings.Contains(ua, "tablet"):
+		kind = "Mobile"
+	case strings.Contains(ua, "ipad"), strings.Contains(ua, "tablet"):
+		kind = "Tablet"
+	}
+	os := "Unknown OS"
+	switch {
+	case strings.Contains(ua, "windows"):
+		os = "Windows"
+	case strings.Contains(ua, "mac os") || strings.Contains(ua, "macintosh"):
+		os = "macOS"
+	case strings.Contains(ua, "android"):
+		os = "Android"
+	case strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad"):
+		os = "iOS"
+	case strings.Contains(ua, "linux"):
+		os = "Linux"
+	case strings.Contains(ua, "cros"):
+		os = "ChromeOS"
+	}
+	browser := "Unknown Browser"
+	switch {
+	case strings.Contains(ua, "edg"):
+		browser = "Edge"
+	case strings.Contains(ua, "chrome") && !strings.Contains(ua, "chromium"):
+		browser = "Chrome"
+	case strings.Contains(ua, "firefox"):
+		browser = "Firefox"
+	case strings.Contains(ua, "safari") && !strings.Contains(ua, "chrome"):
+		browser = "Safari"
+	}
+	return fmt.Sprintf("%s · %s · %s", kind, os, browser)
 }

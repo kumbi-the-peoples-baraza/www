@@ -9,6 +9,19 @@ interface Props {
   onClose: () => void
 }
 
+function formatDateTaken(value?: string): string {
+  if (!value) return ''
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return ''
+  const ord = (n: number) => {
+    const s = ['th', 'st', 'nd', 'rd']
+    const v = n % 100
+    return s[(v - 20) % 10] || s[v] || s[0]
+  }
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+    .replace(/\d+/, (m) => `${m}${ord(parseInt(m, 10))}`)
+}
+
 export default function ImageGallery({ images, initialIndex = 0, onClose }: Props) {
   const [index, setIndex] = useState(initialIndex)
   const touchStartX = useRef(0)
@@ -94,6 +107,12 @@ export default function ImageGallery({ images, initialIndex = 0, onClose }: Prop
         {img.caption && (
           <p className="text-white/80 text-sm text-center max-w-lg leading-relaxed">
             {img.caption}
+          </p>
+        )}
+        {(img.photographer || img.dateTaken) && (
+          <p className="text-white/50 text-xs text-center">
+            Photo: {img.photographer || 'Kumbi Media Team'}
+            {img.dateTaken && ` · ${formatDateTaken(img.dateTaken)}`}
           </p>
         )}
       </div>

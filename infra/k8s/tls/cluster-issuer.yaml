@@ -18,8 +18,11 @@ spec:
       name: letsencrypt-staging-account-key
     solvers:
       - http01:
-          ingress:
-            class: nginx
+          gatewayHTTPRoute:
+            parentRefs:
+              - group: gateway.networking.k8s.io
+                kind: Gateway
+                name: kumbi-gateway
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -33,5 +36,8 @@ spec:
       name: letsencrypt-prod-account-key
     solvers:
       - http01:
-          ingress:
-            class: nginx
+          gatewayHTTPRoute:
+            parentRefs:
+              - group: gateway.networking.k8s.io
+                kind: Gateway
+                name: kumbi-gateway

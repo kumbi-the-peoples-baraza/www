@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"runtime/debug"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +23,7 @@ func Logger(log zerolog.Logger) gin.HandlerFunc {
 
 func Recovery(log zerolog.Logger) gin.HandlerFunc {
 	return gin.RecoveryWithWriter(nil, func(c *gin.Context, err interface{}) {
-		log.Error().Interface("error", err).Msg("panic recovered")
+		log.Error().Interface("error", err).Str("stack", string(debug.Stack())).Msg("panic recovered")
 		c.AbortWithStatusJSON(500, gin.H{"error": "internal server error"})
 	})
 }

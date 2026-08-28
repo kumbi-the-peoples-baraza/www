@@ -1,6 +1,7 @@
 import { Mail, Phone, MapPin } from "lucide-react";
 import { useContactStore } from "@/store/contactStore";
 import { useConfig } from "@/hooks/useConfig";
+import { SafeHtml } from "@/components/ui/SafeHtml";
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -54,10 +55,11 @@ export default function Footer() {
               </span>
             </div>
           </div>
-          <p
+          <SafeHtml
+            html={f.about}
             className="text-sm leading-relaxed mb-7 max-w-sm rich-content"
+            as="p"
             style={{ color: fgMuted }}
-            dangerouslySetInnerHTML={{ __html: f.about }}
           />
 
           <div className="flex gap-3">

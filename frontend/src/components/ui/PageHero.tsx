@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { SafeHtml } from "@/components/ui/SafeHtml";
 
 interface Props {
   title: string;
@@ -42,8 +43,7 @@ export default function PageHero({ title, subtitle, tag, img }: Props) {
               {title}
             </h1>
             {subtitle && (
-              <p className="text-white/70 mt-3 text-base max-w-2xl leading-relaxed rich-content"
-                dangerouslySetInnerHTML={{ __html: subtitle }} />
+              <SafeHtml html={subtitle} className="text-white/70 mt-3 text-base max-w-2xl leading-relaxed rich-content" as="p" />
             )}
           </motion.div>
         </div>

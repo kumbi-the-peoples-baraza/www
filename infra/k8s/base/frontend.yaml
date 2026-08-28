@@ -25,6 +25,13 @@ spec:
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 10
+          volumeMounts:
+            - name: storage-pvc
+              mountPath: /app/storage
+      volumes:
+        - name: storage-pvc
+          persistentVolumeClaim:
+            claimName: storage-pvc
 ---
 apiVersion: v1
 kind: Service

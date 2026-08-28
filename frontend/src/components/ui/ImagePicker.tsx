@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { mediaApi } from '@/api/client'
-import { Upload, X, Check, RotateCcw, FlipHorizontal, FlipVertical, Move } from 'lucide-react'
+import { Upload, X, Check, RotateCcw, FlipHorizontal, FlipVertical, ZoomIn, ZoomOut, Move, Square, RectangleHorizontal, RectangleVertical } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -9,6 +9,7 @@ interface Props {
   value: string          // "url" or "url|x% y%" for focal point
   onChange: (url: string) => void
   label?: string
+  circle?: boolean       // crop/display as a circle (people portraits)
 }
 
 /** Parse stored value into url + focal point */
@@ -17,158 +18,164 @@ function parseValue(v: string): { url: string; focal: string } {
   return { url, focal }
 }
 
-// ── Focal point picker ────────────────────────────────────────────────────────
-function FocalPicker({ src, focal, onSave, onCancel }: {
-  src: string; focal: string
-  onSave: (focal: string) => void; onCancel: () => void
+// ── Unified image editor (transform + crop + focal) ─────────────────────────
+function UnifiedImageEditor({ src, shape = 'rect', onSave, onCancel }: {
+  src: string; shape?: 'rect' | 'circle'
+  onSave: (dataUrl: string) => void; onCancel: () => void
 }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState(() => {
-    const [x, y] = focal.replace(/%/g, '').split(' ').map(Number)
-    return { x: isNaN(x) ? 50 : x, y: isNaN(y) ? 50 : y }
-  })
-  const dragging = useRef(false)
-
-  const updatePos = useCallback((e: MouseEvent | TouchEvent) => {
-    const el = containerRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    const x = Math.round(Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100)))
-    const y = Math.round(Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100)))
-    setPos({ x, y })
-  }, [])
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent | TouchEvent) => { if (dragging.current) updatePos(e) }
-    const onUp = () => { dragging.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    window.addEventListener('touchmove', onMove)
-    window.addEventListener('touchend', onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      window.removeEventListener('touchmove', onMove)
-      window.removeEventListener('touchend', onUp)
-    }
-  }, [updatePos])
-
-  return createPortal(
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center sidebar-overlay">
-      <div className="glass-card p-6 max-w-2xl w-full mx-4 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-black text-primary">Set Focal Point</h3>
-            <p className="text-sm text-muted-foreground">Drag the crosshair to choose which part of the image is always visible</p>
-          </div>
-          <button onClick={onCancel}><X className="w-5 h-5" /></button>
-        </div>
-
-        {/* Preview with draggable focal point */}
-        <div
-          ref={containerRef}
-          className="relative w-full h-72 overflow-hidden rounded-xl bg-muted cursor-crosshair select-none"
-          onMouseDown={e => { dragging.current = true; updatePos(e.nativeEvent) }}
-          onTouchStart={e => { dragging.current = true; updatePos(e.nativeEvent) }}
-        >
-          <img
-            src={src} alt=""
-            className="w-full h-full object-cover pointer-events-none"
-            style={{ objectPosition: `${pos.x}% ${pos.y}%` }}
-            draggable={false}
-          />
-          {/* Crosshair */}
-          <div
-            className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-          >
-            <div className="absolute inset-0 rounded-full border-2 border-white shadow-lg" />
-            <div className="absolute top-1/2 left-0 right-0 h-px bg-white/80" />
-            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/80" />
-          </div>
-        </div>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Focal point: {pos.x}% {pos.y}% — the image will always show this area regardless of crop
-        </p>
-
-        <div className="flex gap-3">
-          <button onClick={() => onSave(`${pos.x}% ${pos.y}%`)} className="btn-primary flex items-center gap-2">
-            <Check className="w-4 h-4" /> Apply Focal Point
-          </button>
-          <button onClick={onCancel} className="btn-ghost">Cancel</button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-}
-
-// ── Canvas image editor (rotate/flip) ─────────────────────────────────────────
-function ImageEditor({ src, onSave, onCancel }: { src: string; onSave: (dataUrl: string) => void; onCancel: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const thumbRef = useRef<HTMLCanvasElement>(null)
+  const [nat, setNat] = useState({ w: 0, h: 0 })
+  const [stage, setStage] = useState({ w: 0, h: 0 })
+  const [aspect, setAspect] = useState<'portrait' | 'landscape' | 'square'>('portrait')
+  const [scale, setScale] = useState(1)
   const [rotation, setRotation] = useState(0)
   const [flipH, setFlipH] = useState(false)
   const [flipV, setFlipV] = useState(false)
-  const imgRef = useRef<HTMLImageElement | null>(null)
+  const [off, setOff] = useState({ x: 0, y: 0 })
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
 
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current
-    const img = imgRef.current
-    if (!canvas || !img) return
-    const rad = (rotation * Math.PI) / 180
-    const sin = Math.abs(Math.sin(rad)), cos = Math.abs(Math.cos(rad))
-    canvas.width  = img.width * cos + img.height * sin
-    canvas.height = img.width * sin + img.height * cos
-    const ctx = canvas.getContext('2d')!
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.save()
-    ctx.translate(canvas.width / 2, canvas.height / 2)
-    ctx.rotate(rad)
-    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
-    ctx.drawImage(img, -img.width / 2, -img.height / 2)
-    ctx.restore()
-  }, [rotation, flipH, flipV])
+  const aspectRatio = shape === 'circle' ? 1 : aspect === 'portrait' ? 3 / 4 : aspect === 'landscape' ? 4 / 3 : 1
 
   useEffect(() => {
     const img = new window.Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => { imgRef.current = img; draw() }
+    img.onload = () => {
+      imgRef.current = img
+      setNat({ w: img.naturalWidth, h: img.naturalHeight })
+      setScale(1); setOff({ x: 0, y: 0 }); setRotation(0); setFlipH(false); setFlipV(false)
+    }
     img.src = src
   }, [src])
 
-  useEffect(() => { draw() }, [draw])
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setStage({ w: el.clientWidth, h: el.clientHeight }))
+    ro.observe(el)
+    setStage({ w: el.clientWidth, h: el.clientHeight })
+    return () => ro.disconnect()
+  }, [])
+
+  const cover = nat.w > 0 && stage.w > 0 ? Math.max(stage.w / nat.w, stage.h / nat.h) : 1
+
+  const draw = useCallback((canvas: HTMLCanvasElement, outW: number) => {
+    const img = imgRef.current
+    if (!img || nat.w === 0 || stage.w === 0) return
+    const outH = Math.round((outW * stage.h) / stage.w)
+    canvas.width = outW; canvas.height = outH
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, outW, outH)
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH)
+    const K = outW / stage.w
+    const drawW = stage.w * cover
+    const drawH = stage.h * cover
+    ctx.save()
+    if (shape === 'circle') {
+      ctx.beginPath()
+      ctx.arc(outW / 2, outH / 2, Math.min(outW, outH) / 2, 0, Math.PI * 2)
+      ctx.clip()
+    }
+    ctx.translate(outW / 2 + off.x * K, outH / 2 + off.y * K)
+    ctx.rotate((rotation * Math.PI) / 180)
+    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
+    ctx.scale(scale, scale)
+    ctx.scale(K, K)
+    ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH)
+    ctx.restore()
+  }, [nat, stage, cover, off, rotation, flipH, flipV, scale, shape])
+
+  useEffect(() => {
+    if (thumbRef.current) draw(thumbRef.current, 160)
+  }, [draw])
+
+  const onDown = (e: React.MouseEvent | React.TouchEvent) => {
+    const p = 'touches' in e ? e.touches[0] : e
+    drag.current = { x: p.clientX, y: p.clientY, ox: off.x, oy: off.y }
+  }
+  const onMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drag.current) return
+    const p = 'touches' in e ? e.touches[0] : e
+    setOff({
+      x: drag.current.ox + (p.clientX - drag.current.x),
+      y: drag.current.oy + (p.clientY - drag.current.y),
+    })
+  }
+  const onUp = () => { drag.current = null }
+
+  const save = () => {
+    const out = document.createElement('canvas')
+    draw(out, 1200)
+    const dataUrl = shape === 'circle'
+      ? out.toDataURL('image/png')
+      : out.toDataURL('image/jpeg', 0.92)
+    onSave(dataUrl)
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center sidebar-overlay">
-      <div className="glass-card p-6 max-w-2xl w-full mx-4 flex flex-col gap-4">
+      <div className="glass-card p-6 max-w-3xl w-full mx-4 flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-black text-primary">Edit Image</h3>
+          <div>
+            <h3 className="font-black text-primary">{shape === 'circle' ? 'Crop Portrait' : 'Edit & Crop Image'}</h3>
+            <p className="text-sm text-muted-foreground">Zoom, rotate, flip and drag to position. The dark frame shows the visible part.</p>
+          </div>
           <button onClick={onCancel}><X className="w-5 h-5" /></button>
         </div>
-        <div className="overflow-auto max-h-[50vh] flex items-center justify-center bg-muted rounded-xl p-2">
-          <canvas ref={canvasRef} className="max-w-full max-h-[45vh] rounded" />
+
+        <div className="flex flex-col md:flex-row gap-4">
+          <div
+            ref={stageRef}
+            className="relative flex-1 overflow-hidden bg-black select-none touch-none cursor-move"
+            style={{ aspectRatio: String(1 / aspectRatio) }}
+            onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+            onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+          >
+            {nat.w > 0 && (
+              <img
+                src={src} alt=""
+                draggable={false}
+                className="pointer-events-none absolute left-1/2 top-1/2 max-w-none"
+                style={{
+                  width: stage.w * cover,
+                  height: stage.h * cover,
+                  transform: `translate(-50%,-50%) translate(${off.x}px,${off.y}px) rotate(${rotation}deg) scale(${scale}) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
+                }}
+              />
+            )}
+            {shape === 'circle' && (
+              <div className="pointer-events-none absolute inset-0 rounded-full border-2 border-white/70" />
+            )}
+          </div>
+
+          <div className="md:w-44 flex flex-col gap-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Visible part</p>
+            <canvas ref={thumbRef} className="w-40 rounded-lg border border-border bg-black" style={{ aspectRatio: String(1 / aspectRatio) }} />
+          </div>
         </div>
+
+        {shape !== 'circle' && (
+          <div className="flex flex-wrap gap-2">
+            {([['portrait', RectangleVertical], ['landscape', RectangleHorizontal], ['square', Square]] as const).map(([a, Icon]) => (
+              <button key={a} onClick={() => setAspect(a)} className={`btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5 ${aspect === a ? '!border-primary !text-primary' : ''}`}>
+                <Icon className="w-4 h-4" /> {a[0].toUpperCase() + a.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setRotation(r => r - 90)} className="btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5">
-            <RotateCcw className="w-4 h-4" /> Left
-          </button>
-          <button onClick={() => setRotation(r => r + 90)} className="btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5">
-            <RotateCcw className="w-4 h-4 scale-x-[-1]" /> Right
-          </button>
-          <button onClick={() => setFlipH(v => !v)} className={`btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5 ${flipH ? '!border-primary !text-primary' : ''}`}>
-            <FlipHorizontal className="w-4 h-4" /> Flip H
-          </button>
-          <button onClick={() => setFlipV(v => !v)} className={`btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5 ${flipV ? '!border-primary !text-primary' : ''}`}>
-            <FlipVertical className="w-4 h-4" /> Flip V
-          </button>
+          <button onClick={() => setScale(s => Math.min(5, s * 1.2))} className="btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5"><ZoomIn className="w-4 h-4" /> Zoom in</button>
+          <button onClick={() => setScale(s => Math.max(0.3, s / 1.2))} className="btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5"><ZoomOut className="w-4 h-4" /> Zoom out</button>
+          <button onClick={() => setRotation(r => r - 90)} className="btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5"><RotateCcw className="w-4 h-4" /> Left</button>
+          <button onClick={() => setRotation(r => r + 90)} className="btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5"><RotateCcw className="w-4 h-4 scale-x-[-1]" /> Right</button>
+          <button onClick={() => setFlipH(v => !v)} className={`btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5 ${flipH ? '!border-primary !text-primary' : ''}`}><FlipHorizontal className="w-4 h-4" /> Flip H</button>
+          <button onClick={() => setFlipV(v => !v)} className={`btn-ghost !py-2 !px-3 !text-sm flex items-center gap-1.5 ${flipV ? '!border-primary !text-primary' : ''}`}><FlipVertical className="w-4 h-4" /> Flip V</button>
         </div>
+
         <div className="flex gap-3">
-          <button onClick={() => onSave(canvasRef.current!.toDataURL('image/jpeg', 0.92))} className="btn-primary flex items-center gap-2">
-            <Check className="w-4 h-4" /> Apply & Use
-          </button>
+          <button onClick={save} className="btn-primary flex items-center gap-2"><Check className="w-4 h-4" /> Apply &amp; Use</button>
           <button onClick={onCancel} className="btn-ghost">Cancel</button>
         </div>
       </div>
@@ -178,11 +185,10 @@ function ImageEditor({ src, onSave, onCancel }: { src: string; onSave: (dataUrl:
 }
 
 // ── Main ImagePicker ──────────────────────────────────────────────────────────
-export default function ImagePicker({ value, onChange, label = 'Image' }: Props) {
+export default function ImagePicker({ value, onChange, label = 'Image', circle = false }: Props) {
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
-  const [pickingFocal, setPickingFocal] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { url, focal } = parseValue(value)
@@ -205,7 +211,7 @@ export default function ImagePicker({ value, onChange, label = 'Image' }: Props)
   const uploadDataUrl = async (dataUrl: string) => {
     const res = await fetch(dataUrl)
     const blob = await res.blob()
-    uploadMutation.mutate(new File([blob], `edited-${Date.now()}.jpg`, { type: 'image/jpeg' }))
+    uploadMutation.mutate(new File([blob], `edited-${Date.now()}.${circle ? 'png' : 'jpg'}`, { type: circle ? 'image/png' : 'image/jpeg' }))
   }
 
   const images = (files as { id: string; url: string; name: string }[])
@@ -214,29 +220,21 @@ export default function ImagePicker({ value, onChange, label = 'Image' }: Props)
   return (
     <>
       {editing && (
-        <ImageEditor src={editing}
+        <UnifiedImageEditor src={editing} shape={circle ? 'circle' : 'rect'}
           onSave={async (d) => { setEditing(null); await uploadDataUrl(d) }}
           onCancel={() => setEditing(null)} />
-      )}
-      {pickingFocal && url && (
-        <FocalPicker src={url} focal={focal}
-          onSave={(f) => { onChange(`${url}|${f}`); setPickingFocal(false) }}
-          onCancel={() => setPickingFocal(false)} />
       )}
 
       <div className="flex flex-col gap-2">
         <label className="form-label">{label}</label>
 
         {url && (
-          <div className="relative group w-full h-36 rounded-xl overflow-hidden bg-muted">
+          <div className={`relative group w-full h-36 overflow-hidden bg-muted ${circle ? 'rounded-full' : 'rounded-xl'}`}>
             <img src={url} alt="" className="w-full h-full object-cover"
-              style={{ objectPosition: focal }} />
+              style={circle ? undefined : { objectPosition: focal }} />
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
               <button onClick={() => setEditing(url)} className="btn-primary !py-1.5 !px-3 !text-xs flex items-center gap-1">
-                <RotateCcw className="w-3 h-3" /> Edit
-              </button>
-              <button onClick={() => setPickingFocal(true)} className="btn-primary !py-1.5 !px-3 !text-xs flex items-center gap-1">
-                <Move className="w-3 h-3" /> Focal
+                <Move className="w-3 h-3" /> Edit &amp; Crop
               </button>
               <button onClick={() => onChange('')} className="btn-ghost !py-1.5 !px-3 !text-xs border-white/50 text-white hover:bg-white/20">
                 <X className="w-3 h-3" />
@@ -267,13 +265,9 @@ export default function ImagePicker({ value, onChange, label = 'Image' }: Props)
                   <button key={f.id} onClick={() => { onChange(f.url); setOpen(false) }}
                     className={`group relative aspect-square rounded-lg overflow-hidden transition-all ${url === f.url ? 'ring-2 ring-primary' : ''}`}>
                     <img src={f.url} alt={f.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                    {/* Selected indicator */}
                     {url === f.url && (
-                      <div className="absolute top-1 right-1 z-10 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                        ✓
-                      </div>
+                      <div className="absolute top-1 right-1 z-10 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-md">✓</div>
                     )}
-                    {/* Hover overlay — Netflix style */}
                     <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-2">
                       <p className="text-white text-[11px] font-bold truncate leading-tight">{f.name}</p>
                     </div>

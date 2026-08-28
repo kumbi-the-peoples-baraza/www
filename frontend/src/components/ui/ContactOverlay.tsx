@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { formsApi } from '@/api/client'
 import OverlayPanel from './OverlayPanel'
-import CaptchaField from './CaptchaField'
+import TurnstileField from './TurnstileField'
 
 const schema = z.object({
   name: z.string().min(1, 'Required'),
@@ -12,8 +12,7 @@ const schema = z.object({
   subject: z.string().min(1, 'Required'),
   message: z.string().min(10, 'Message too short'),
   _hp: z.string().max(0, 'Bot detected'),
-  _captcha_token: z.string().min(1, 'Captcha required'),
-  _captcha_answer: z.string().min(1, 'Please answer the captcha'),
+  cf_turnstile_response: z.string().min(1, 'Please verify you are human'),
 })
 type FormData = z.infer<typeof schema>
 
@@ -33,7 +32,6 @@ export default function ContactOverlay({ open, onClose }: Props) {
       <form onSubmit={handleSubmit(d => mutation.mutate(d))} className="overlay-form">
         <input {...register('_hp')} type="text" tabIndex={-1} autoComplete="off"
           style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
-        <input type="hidden" {...register('_captcha_token')} />
         <Field label="Full Name" error={errors.name?.message}>
           <input {...register('name')} className="input-field" placeholder="Your full name" />
         </Field>
@@ -46,11 +44,8 @@ export default function ContactOverlay({ open, onClose }: Props) {
         <Field label="Message" error={errors.message?.message}>
           <textarea {...register('message')} rows={6} className="input-field" style={{ resize: 'vertical' }} placeholder="Tell us more…" />
         </Field>
-        <CaptchaField
-          setToken={t => setValue('_captcha_token', t)}
-          onAnswerChange={v => setValue('_captcha_answer', v)}
-          error={errors._captcha_answer?.message}
-        />
+        <TurnstileField onVerify={t => setValue('cf_turnstile_response', t)} />
+        {errors.cf_turnstile_response && <p style={{ color: 'hsl(var(--destructive))', fontWeight: 600, fontSize: '0.9rem' }}>{errors.cf_turnstile_response.message}</p>}
         <button type="submit" disabled={mutation.isPending} className="btn-primary" style={{ width: '100%' }}>
           {mutation.isPending ? 'Sending…' : 'Send Message'}
         </button>

@@ -12,23 +12,6 @@ images:
     newTag: prod
 patches:
   - patch: |-
-      - op: replace
-        path: /spec/listeners/0/addresses
-        value:
-          - type: IPAddress
-            value: 10.0.0.200
-      - op: replace
-        path: /spec/listeners/0/hostname
-        value: kumbike.org
-      - op: add
-        path: /metadata/annotations
-        value:
-          envoy.gateway.kubernetes.io/ssl-redirect: "false"
-          cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    target:
-      kind: Gateway
-      name: kumbi-gateway
-  - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent

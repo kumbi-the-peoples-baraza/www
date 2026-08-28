@@ -15,3 +15,10 @@ export function downloadBlob(blob: Blob, filename: string) {
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+// Image values may be stored as "url" or "url|x% y%" (url + focal point).
+// Return the bare URL suitable for use as an <img src>.
+export function parseImageValue(value?: string | null): string {
+  if (!value) return ''
+  return value.split('|')[0]
+}

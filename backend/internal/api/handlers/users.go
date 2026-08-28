@@ -1,16 +1,23 @@
 package handlers
 
 import (
+	"fmt"
 	"kumbi/internal/auth"
+	"kumbi/internal/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type UsersHandler struct{ db *pgxpool.Pool }
+type UsersHandler struct {
+	db   *pgxpool.Pool
+	mail *services.EmailService
+}
 
-func NewUsersHandler(db *pgxpool.Pool) *UsersHandler { return &UsersHandler{db: db} }
+func NewUsersHandler(db *pgxpool.Pool, mail *services.EmailService) *UsersHandler {
+	return &UsersHandler{db: db, mail: mail}
+}
 
 func (h *UsersHandler) List(c *gin.Context) {
 	rows, err := h.db.Query(c, `SELECT id, name, email, role, active, created_at FROM users ORDER BY created_at DESC`)
@@ -40,7 +47,7 @@ func (h *UsersHandler) Create(c *gin.Context) {
 	var req struct {
 		Name     string `json:"name" binding:"required"`
 		Email    string `json:"email" binding:"required,email"`
-		Password string `json:"password" binding:"required"`
+		Password string `json:"password"`
 		Role     string `json:"role"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -50,7 +57,21 @@ func (h *UsersHandler) Create(c *gin.Context) {
 	if req.Role == "" {
 		req.Role = "viewer"
 	}
-	hash, err := auth.HashPassword(req.Password)
+
+	// When no password is supplied we still store a random one so the account
+	// cannot be logged into with a known/empty value. The user receives a
+	// one-time setup link (never the password) and sets their own on first use.
+	password := req.Password
+	if password == "" {
+		generated, err := auth.GeneratePassword(16)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "password generation failed"})
+			return
+		}
+		password = generated
+	}
+
+	hash, err := auth.HashPassword(password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "hash failed"})
 		return
@@ -58,23 +79,41 @@ func (h *UsersHandler) Create(c *gin.Context) {
 	var id string
 	err = h.db.QueryRow(
 		c,
-		`INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4) RETURNING id`,
+		`INSERT INTO users (name, email, password, role, force_password_change) VALUES ($1,$2,$3,$4,false) RETURNING id`,
 		req.Name, req.Email, hash, req.Role,
 	).Scan(&id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"id": id})
+
+	// Email a setup link when no password was supplied. The link reuses the
+	// forgot-password / reset-password flow, so no OTP is required.
+	invited := false
+	if req.Password == "" && h.mail != nil {
+		if token, terr := auth.GenerateResetToken(); terr == nil {
+			if _, derr := h.db.Exec(c,
+				`INSERT INTO password_resets (user_id, token, expires_at) VALUES ($1,$2,$3)`,
+				id, token, auth.TokenExpiry()); derr == nil {
+				if err := h.mail.SendInviteEmail(req.Email, req.Name, token); err != nil {
+					fmt.Printf("invite email to %s failed: %v\n", req.Email, err)
+				} else {
+					invited = true
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"id": id, "invited": invited})
 }
 
 func (h *UsersHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req struct {
-		Name     *string `json:"name"`
-		Role     *string `json:"role"`
-		Active   *bool   `json:"active"`
-		Password *string `json:"password"`
+	Name     *string `json:"name"`
+	Role     *string `json:"role"`
+	Active   *bool   `json:"active"`
+	Password *string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

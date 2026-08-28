@@ -5,6 +5,7 @@ import CMSLayout from '@/components/layout/CMSLayout'
 import PageLoader from '@/components/ui/PageLoader'
 import { useThemeStore } from '@/store/themeStore'
 import { useAuthStore } from '@/store/authStore'
+import { useConfig } from '@/hooks/useConfig'
 
 const Home = lazy(() => import('@/components/pages/Home'))
 const Projects = lazy(() => import('@/components/pages/Projects'))
@@ -15,6 +16,9 @@ const BlogPostPage = lazy(() => import('@/components/pages/BlogPost'))
 const About = lazy(() => import('@/components/pages/About'))
 const Volunteer = lazy(() => import('@/components/pages/Volunteer'))
 const Login = lazy(() => import('@/components/pages/Login'))
+const ForgotPassword = lazy(() => import('@/components/pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('@/components/pages/ResetPassword'))
+const SetPassword = lazy(() => import('@/components/pages/SetPassword'))
 const PublicNotebookPage = lazy(() => import('@/components/pages/Notebook').then(m => ({ default: m.PublicNotebookPage })))
 
 const CMSDashboard = lazy(() => import('@/components/cms/Dashboard'))
@@ -29,10 +33,28 @@ const CMSNotebooks = lazy(() => import('@/components/cms/Notebooks'))
 const CMSBlog = lazy(() => import('@/components/cms/Blog'))
 const CMSSiteContent = lazy(() => import('@/components/cms/SiteContent'))
 const CMSPeople = lazy(() => import('@/components/cms/People'))
+const CMSSecurity = lazy(() => import('@/components/cms/Security'))
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
+function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
+  const { isAuthenticated, user } = useAuthStore()
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (allowedRoles && (!user || !allowedRoles.includes(user.role))) {
+    return <Navigate to="/cms" replace />
+  }
+  return <>{children}</>
+}
+
+// SiteTitle derives the browser/document title from the Navigation & Branding
+// values configured in /cms/site-content (nav.brand + nav.tagline). It removes
+// the previously hard-wired "Empowering Communities" fallback.
+function SiteTitle() {
+  const cfg = useConfig()
+  useEffect(() => {
+    const brand = cfg.nav.brand?.trim() || 'Kumbi'
+    const tagline = cfg.nav.tagline?.trim()
+    document.title = tagline ? `${brand} | ${tagline}` : brand
+  }, [cfg.nav.brand, cfg.nav.tagline])
+  return null
 }
 
 export default function App() {
@@ -48,6 +70,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <SiteTitle />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route element={<Layout />}>
@@ -63,6 +86,9 @@ export default function App() {
             <Route path="/n/:slug" element={<PublicNotebookPage />} />
           </Route>
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+          <Route path="/set-password" element={<ProtectedRoute><SetPassword /></ProtectedRoute>} />
           <Route
             path="/cms"
             element={
@@ -76,8 +102,9 @@ export default function App() {
             <Route path="content" element={<CMSContent />} />
             <Route path="media" element={<CMSMedia />} />
             <Route path="forms" element={<CMSForms />} />
-            <Route path="users" element={<CMSUsers />} />
-            <Route path="analytics" element={<CMSAnalytics />} />
+            <Route path="users" element={<ProtectedRoute allowedRoles={["admin"]}><CMSUsers /></ProtectedRoute>} />
+            <Route path="security" element={<ProtectedRoute allowedRoles={["admin"]}><CMSSecurity /></ProtectedRoute>} />
+            <Route path="analytics" element={<ProtectedRoute allowedRoles={["admin"]}><CMSAnalytics /></ProtectedRoute>} />
             <Route path="appearance" element={<CMSAppearance />} />
             <Route path="notebooks" element={<CMSNotebooks />} />
               <Route path="blog" element={<CMSBlog />} />

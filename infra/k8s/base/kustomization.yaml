@@ -4,8 +4,8 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - storage-classes.yaml
   - postgres.yaml
   - backend.yaml
   - frontend.yaml
-  - envoy-gateway.yaml
-  - seed-job.yaml
+  - ingress.yaml

@@ -1,0 +1,75 @@
+- generic [ref=f3e41]:
+  - complementary [ref=f3e42]:
+    - generic [ref=f3e43]:
+      - generic [ref=f3e44]: Kumbi CMS
+      - button "Collapse sidebar" [ref=f3e48] [cursor=pointer]
+    - navigation [ref=f3e51]:
+      - link "Dashboard" [ref=f3e52] [cursor=pointer]:
+        - /url: /cms
+      - link "Site Content" [ref=f3e59] [cursor=pointer]:
+        - /url: /cms/site-content
+      - link "Blog" [ref=f3e64] [cursor=pointer]:
+        - /url: /cms/blog
+      - link "Our People" [ref=f3e69] [cursor=pointer]:
+        - /url: /cms/people
+      - link "Media" [ref=f3e75] [cursor=pointer]:
+        - /url: /cms/media
+      - link "Feedback" [ref=f3e81] [cursor=pointer]:
+        - /url: /cms/forms
+      - link "Users" [ref=f3e85] [cursor=pointer]:
+        - /url: /cms/users
+      - link "Security" [ref=f3e92] [cursor=pointer]:
+        - /url: /cms/security
+      - link "Analytics" [ref=f3e96] [cursor=pointer]:
+        - /url: /cms/analytics
+    - generic [ref=f3e100]:
+      - paragraph [ref=f3e101]: Admin
+      - paragraph [ref=f3e102]: admin
+  - generic [ref=f3e103]:
+    - banner [ref=f3e104]:
+      - generic [ref=f3e105]:
+        - button "Switch to Light theme" [ref=f3e106] [cursor=pointer]
+        - button "Switch to Dim theme" [ref=f3e110] [cursor=pointer]
+        - button "Switch to Dark theme" [ref=f3e114] [cursor=pointer]
+      - button "Sign Out" [ref=f3e117] [cursor=pointer]
+    - main [ref=f3e122]:
+      - generic [ref=f3e124]:
+        - heading "Dashboard" [level=1] [ref=f3e125]
+        - generic [ref=f3e126]:
+          - generic [ref=f3e127]:
+            - paragraph [ref=f3e132]: "7"
+            - paragraph [ref=f3e133]: Pages
+          - generic [ref=f3e134]:
+            - paragraph [ref=f3e141]: "1"
+            - paragraph [ref=f3e142]: Users
+          - generic [ref=f3e143]:
+            - paragraph [ref=f3e147]: "0"
+            - paragraph [ref=f3e148]: Form Submissions
+          - generic [ref=f3e149]:
+            - paragraph [ref=f3e154]: "4"
+            - paragraph [ref=f3e155]: Page Views (30d)
+        - generic [ref=f3e156]:
+          - generic [ref=f3e157]:
+            - heading "Top Pages (30d)" [level=2] [ref=f3e158]
+            - generic [ref=f3e163]:
+              - generic [ref=f3e164]: /
+              - generic [ref=f3e165]: "4"
+          - generic [ref=f3e166]:
+            - heading "Browsers (30d)" [level=2] [ref=f3e167]
+            - generic [ref=f3e171]:
+              - generic [ref=f3e172]: Chrome
+              - generic [ref=f3e175]: "4"
+          - generic [ref=f3e176]:
+            - heading "Daily Views (14d)" [level=2] [ref=f3e177]
+            - generic [ref=f3e181]:
+              - generic [ref=f3e182]:
+                - generic [ref=f3e183]: "2"
+                - generic [ref=f3e185]: 08-08T00:00:00Z
+              - generic [ref=f3e186]:
+                - generic [ref=f3e187]: "2"
+                - generic [ref=f3e189]: 08-09T00:00:00Z
+          - generic [ref=f3e190]:
+            - heading "Top Referrers (30d)" [level=2] [ref=f3e191]
+            - generic [ref=f3e193]:
+              - paragraph [ref=f3e194]: Direct
+              - paragraph [ref=f3e195]: "4"

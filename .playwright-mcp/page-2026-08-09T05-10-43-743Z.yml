@@ -1,0 +1,96 @@
+- generic [ref=f5e8]:
+  - generic [ref=f5e10]:
+    - complementary [ref=f5e11]:
+      - generic [ref=f5e12]:
+        - generic [ref=f5e13]: Kumbi CMS
+        - button "Collapse sidebar" [ref=f5e17] [cursor=pointer]
+      - navigation [ref=f5e20]:
+        - link "Dashboard" [ref=f5e21] [cursor=pointer]:
+          - /url: /cms
+        - link "Site Content" [ref=f5e28] [cursor=pointer]:
+          - /url: /cms/site-content
+        - link "Blog" [ref=f5e33] [cursor=pointer]:
+          - /url: /cms/blog
+        - link "Our People" [ref=f5e38] [cursor=pointer]:
+          - /url: /cms/people
+        - link "Media" [ref=f5e44] [cursor=pointer]:
+          - /url: /cms/media
+        - link "Feedback" [ref=f5e50] [cursor=pointer]:
+          - /url: /cms/forms
+        - link "Users" [ref=f5e54] [cursor=pointer]:
+          - /url: /cms/users
+        - link "Security" [ref=f5e61] [cursor=pointer]:
+          - /url: /cms/security
+        - link "Analytics" [ref=f5e65] [cursor=pointer]:
+          - /url: /cms/analytics
+      - generic [ref=f5e69]:
+        - paragraph [ref=f5e70]: Admin
+        - paragraph [ref=f5e71]: admin
+    - generic [ref=f5e72]:
+      - banner [ref=f5e73]:
+        - generic [ref=f5e74]:
+          - button "Switch to Light theme" [ref=f5e75] [cursor=pointer]
+          - button "Switch to Dim theme" [ref=f5e79] [cursor=pointer]
+          - button "Switch to Dark theme" [ref=f5e83] [cursor=pointer]
+        - button "Sign Out" [ref=f5e86] [cursor=pointer]
+      - main [ref=f5e91]:
+        - generic [ref=f5e93]:
+          - generic [ref=f5e94]:
+            - heading "Media Library" [level=1] [ref=f5e95]
+            - generic [ref=f5e96]:
+              - generic [ref=f5e97]:
+                - button "🖼 Library" [ref=f5e98] [cursor=pointer]
+                - button "⚙ Watermark" [ref=f5e99] [cursor=pointer]
+              - button "Upload" [ref=f5e100] [cursor=pointer]
+          - generic [ref=f5e104]:
+            - textbox "Search Images" [ref=f5e106]
+            - combobox [ref=f5e108]:
+              - option "Sort By" [disabled] [selected]
+              - option "Name"
+              - option "Upload date"
+              - option "Size"
+              - option "Views"
+              - option "Date taken"
+              - option "Photographer"
+            - button "By Month" [ref=f5e109] [cursor=pointer]
+            - generic [ref=f5e110]: 2 files
+          - generic [ref=f5e111]:
+            - generic [ref=f5e224] [cursor=pointer]:
+              - img "test_photo_exif" [ref=f5e225]
+              - generic [ref=f5e226]:
+                - paragraph [ref=f5e227]: test_photo_exif
+                - generic [ref=f5e228]: 14 Jul 2025
+                - generic [ref=f5e230]:
+                  - button "View" [active] [ref=f5e231]
+                  - button "Edit metadata" [ref=f5e235]
+                  - button "Delete" [ref=f5e239]
+                  - button "☆" [ref=f5e243]
+            - generic [ref=f5e112] [cursor=pointer]:
+              - img "24 - From Bus" [ref=f5e113]
+              - generic [ref=f5e114]:
+                - paragraph [ref=f5e115]: 24 - From Bus
+                - paragraph [ref=f5e116]: Test
+                - generic [ref=f5e117]:
+                  - generic [ref=f5e118]: Test
+                  - generic [ref=f5e122]: 10 Apr 2026
+                - generic [ref=f5e123]:
+                  - button "View" [ref=f5e124]
+                  - button "Edit metadata" [ref=f5e128]
+                  - button "Delete" [ref=f5e132]
+                  - button "☆" [ref=f5e136]
+  - generic [ref=f5e314]:
+    - generic [ref=f5e315]:
+      - paragraph [ref=f5e317]: test_photo_exif
+      - button "Close" [ref=f5e318] [cursor=pointer]
+    - img "test_photo_exif" [ref=f5e323]
+    - generic [ref=f5e324]:
+      - generic [ref=f5e325]:
+        - button "Zoom out" [ref=f5e326] [cursor=pointer]
+        - generic [ref=f5e330]: 100%
+        - button "Zoom in" [ref=f5e331] [cursor=pointer]
+        - button "Rotate" [ref=f5e336] [cursor=pointer]
+      - generic [ref=f5e340]:
+        - generic [ref=f5e341]: 800 × 600
+        - generic [ref=f5e347]: 23.8 KB
+        - generic [ref=f5e348]: 14 Jul 2025
+        - generic [ref=f5e351]: 0 views

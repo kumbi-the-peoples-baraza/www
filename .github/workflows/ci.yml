@@ -339,7 +339,7 @@ jobs:
           TAG: ${{ needs.build-images.outputs.tag }}
         run: |
           kubectl delete job seed-admin -n kumbi --ignore-not-found 2>/dev/null || true
-          kubectl kustomize infra/k8s/overlays/prod | awk '/^---/{p=0} /kind: Job/{p=1} p' | kubectl apply -f -
+          kubectl kustomize infra/k8s/overlays/prod | awk 'BEGIN{RS="---\n"} /kind: Job/{print}' | kubectl apply -f -
           kubectl wait --for=condition=complete job/seed-admin -n kumbi --timeout=60s
           kubectl logs -n kumbi -l job-name=seed-admin 2>&1 | tee ${{ github.workspace }}/logs/prod-seed-$(date +%Y%m%d-%H%M%S).log
 

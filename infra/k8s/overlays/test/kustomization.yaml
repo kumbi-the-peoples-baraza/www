@@ -1,7 +1,7 @@
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: kumbi
+namespace: kumbi-test
 resources: [../../base, secrets.yaml]
 images:
   - name: kumbi/backend
@@ -14,7 +14,10 @@ patches:
   - patch: |-
       - op: replace
         path: /metadata/namespace
-        value: kumbi
+        value: kumbi-test
+      - op: replace
+        path: /metadata/name
+        value: kumbi-test
     target:
       kind: Namespace
       name: kumbi
@@ -25,25 +28,6 @@ patches:
     target:
       kind: ConfigMap
       name: backend-config
-  - patch: |-
-      - op: add
-        path: /metadata/annotations
-        value:
-          envoy.gateway.kubernetes.io/ssl-redirect: "true"
-          cert-manager.io/cluster-issuer: "selfsigned-issuer"
-      - op: replace
-        path: /spec/listeners/0/hostname
-        value: test.kumbi.local
-      - op: add
-        path: /spec/listeners/0/tls
-        value:
-          certificateRef:
-            group: gateway.networking.k8s.io
-            kind: Certificate
-            name: kumbi-tls-cert
-    target:
-      kind: Gateway
-      name: kumbi-gateway
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy

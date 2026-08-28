@@ -71,7 +71,6 @@ metadata:
   namespace: kumbi
 spec:
   selector:
-    matchLabels:
-      app: backend
+    app: backend
   ports:
     - port: 8080

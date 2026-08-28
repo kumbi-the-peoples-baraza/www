@@ -1,6 +1,16 @@
 export interface GalleryImage {
   url: string
-  caption?: string
+  caption?: string;
+  photographer?: string;
+  dateTaken?: string;
+}
+
+export interface BlogAuthor {
+  id: string;
+  name: string;
+  bio?: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface BlogPost {
@@ -14,6 +24,7 @@ export interface BlogPost {
   galleryImages?: GalleryImage[];
   status: "published" | "draft" | "archived";
   authorId?: string;
+  author?: BlogAuthor | null;
   publishedAt?: string;
   createdAt: string;
   updatedAt: string;

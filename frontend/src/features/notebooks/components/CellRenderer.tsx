@@ -1,5 +1,6 @@
 import type { CellDTO, OutputDTO } from "@/types";
 import { cn } from "@/lib/utils";
+import { sanitizeHtml } from "@/components/ui/SafeHtml";
 
 // ── Output rendering ──────────────────────────────────────────────────────────
 
@@ -12,7 +13,7 @@ function RenderOutput({ output }: { output: OutputDTO }) {
     return (
       <div
         className="notebook-html-output overflow-x-auto"
-        dangerouslySetInnerHTML={{ __html: mb["text/html"] as string }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(mb["text/html"] as string) }}
       />
     );
   }
@@ -30,10 +31,15 @@ function RenderOutput({ output }: { output: OutputDTO }) {
   }
 
   if (mb?.["image/svg+xml"]) {
+    // SVG is high-risk (script, onload). Only allow if it doesn't contain script/event handlers.
+    const raw = mb["image/svg+xml"] as string
+    if (/on\w+\s*=/i.test(raw) || /<script/i.test(raw)) {
+      return <div className="my-2 text-xs text-muted-foreground">SVG blocked (unsafe content)</div>
+    }
     return (
       <div
         className="my-2 overflow-x-auto"
-        dangerouslySetInnerHTML={{ __html: mb["image/svg+xml"] as string }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(raw) }}
       />
     );
   }
@@ -113,7 +119,7 @@ export function CellRenderer({
     return (
       <div
         className={cn("prose prose-sm max-w-none dark:prose-invert", className)}
-        dangerouslySetInnerHTML={{ __html: markdownToHtml(cell.source) }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(markdownToHtml(cell.source)) }}
       />
     );
   }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"kumbi/internal/config"
 	"net/http"
-	"net/smtp"
 )
 
 type Notifier struct{ cfg *config.Config }
@@ -14,25 +13,16 @@ type Notifier struct{ cfg *config.Config }
 func NewNotifier(cfg *config.Config) *Notifier { return &Notifier{cfg: cfg} }
 
 func (n *Notifier) Notify(formType string, data map[string]interface{}) {
+	// Email delivery for form submissions is handled by EmailService
+	// (branded, tabulated, with submission metadata). The notifier only
+	// forwards to WhatsApp if configured.
+	if n.cfg.WhatsAppURL == "" {
+		return
+	}
 	body, _ := json.MarshalIndent(data, "", "  ")
 	subject := fmt.Sprintf("New %s submission - Kumbi", formType)
-
-	if n.cfg.SMTPHost != "" && n.cfg.SMTPUser != "" {
-		auth := smtp.PlainAuth("", n.cfg.SMTPUser, n.cfg.SMTPPass, n.cfg.SMTPHost)
-		msg := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", n.cfg.SMTPUser, subject, string(body))
-		_ = smtp.SendMail(
-			n.cfg.SMTPHost+":"+n.cfg.SMTPPort,
-			auth,
-			n.cfg.SMTPUser,
-			[]string{n.cfg.SMTPUser},
-			[]byte(msg),
-		)
-	}
-
-	if n.cfg.WhatsAppURL != "" {
-		payload, _ := json.Marshal(map[string]interface{}{
-			"text": fmt.Sprintf("*%s*\n\n%s", subject, string(body)),
-		})
-		_, _ = http.Post(n.cfg.WhatsAppURL, "application/json", bytes.NewReader(payload))
-	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"text": fmt.Sprintf("*%s*\n\n%s", subject, string(body)),
+	})
+	_, _ = http.Post(n.cfg.WhatsAppURL, "application/json", bytes.NewReader(payload))
 }

@@ -3,6 +3,8 @@ package handlers
 import (
 	"net/http"
 
+	sanitizepkg "kumbi/pkg/sanitize"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -57,6 +59,7 @@ func (h *ContentHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	req.Content = sanitizepkg.NormalizeContent(req.Content)
 	var mediaURL *string
 	if req.MediaURL != "" {
 		mediaURL = &req.MediaURL
@@ -83,6 +86,10 @@ func (h *ContentHandler) Update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	if req.Content != nil {
+		s := sanitizepkg.NormalizeContent(*req.Content)
+		req.Content = &s
 	}
 	_, err := h.db.Exec(c,
 		`UPDATE content_blocks SET content=COALESCE($1,content), media_url=COALESCE($2,media_url), "order"=COALESCE($3,"order"), updated_at=NOW() WHERE id=$4`,

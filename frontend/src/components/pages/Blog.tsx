@@ -6,14 +6,22 @@ import { blogApi, galleryApi } from '@/api/client'
 import PageHero from '@/components/ui/PageHero'
 import ImageGallery from '@/components/ui/ImageGallery'
 import { useConfig } from '@/hooks/useConfig'
+import { parseImageValue } from '@/lib/utils'
 import type { BlogPost } from '@/types'
 import { ChevronLeft, ChevronRight, Expand } from 'lucide-react'
 
 type Tab = 'recent' | 'popular' | 'all' | 'gallery'
 const PAGE_SIZE = 30
 
+function truncateWords(text: string, max = 100): string {
+  const words = text.trim().split(/\s+/)
+  if (words.length <= max) return text
+  return words.slice(0, max).join(' ') + '…'
+}
+
 function PostCard({ post, index }: { post: BlogPost; index: number }) {
   const navigate = useNavigate()
+  const author = post.author?.name || 'Kumbi Editorial Team'
   return (
     <motion.article
       initial={{ opacity: 0, y: 32 }} whileInView={{ opacity: 1, y: 0 }}
@@ -21,18 +29,21 @@ function PostCard({ post, index }: { post: BlogPost; index: number }) {
       className="glass-card overflow-hidden group hover:-translate-y-1.5 hover:shadow-xl transition-all duration-300 flex flex-col cursor-pointer"
       onClick={() => navigate(`/blog/${post.slug}`)}
     >
-      <div className="aspect-square overflow-hidden shrink-0 bg-muted">
-        {post.coverImage
-          ? <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-          : <div className="w-full h-full flex items-center justify-center text-muted-foreground/30 text-4xl font-black">{post.title[0]}</div>
-        }
-      </div>
+       <div className="aspect-[16/10] overflow-hidden shrink-0 bg-muted">
+         {parseImageValue(post.coverImage)
+           ? <img src={parseImageValue(post.coverImage)} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+           : <div className="w-full h-full flex items-center justify-center text-muted-foreground/30 text-4xl font-black">{post.title[0]}</div>
+         }
+       </div>
       <div className="p-6 flex flex-col flex-1 gap-2">
         <span className="text-xs font-bold text-primary/70 uppercase tracking-widest">
           {new Date(post.publishedAt || post.createdAt).toLocaleDateString('en-KE', { year: 'numeric', month: 'long', day: 'numeric' })}
         </span>
         <h3 className="font-black text-lg leading-snug tracking-tight">{post.title}</h3>
-        <p className="text-muted-foreground text-sm leading-relaxed flex-1">{post.excerpt}</p>
+        {author && (
+          <span className="text-xs font-semibold text-muted-foreground">By {author}</span>
+        )}
+        <p className="text-muted-foreground text-sm leading-relaxed flex-1">{truncateWords(post.excerpt || '')}</p>
         <span className="mt-2 text-sm font-bold text-primary group-hover:underline self-start">Read more →</span>
       </div>
     </motion.article>

@@ -5,14 +5,13 @@ import {
   MessageSquareText,
   Users,
   BarChart3,
-  Palette,
-  BookOpen,
   LogOut,
   ChevronLeft,
   Menu,
   Newspaper,
   Globe,
   UserCircle,
+  Shield,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
@@ -22,15 +21,14 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/cms", icon: LayoutDashboard, label: "Dashboard", end: true },
-  { to: "/cms/site-content", icon: Globe, label: "Site Content" },
+  { to: "/cms/site-content", icon: Globe, label: "Site Settings" },
   { to: "/cms/blog", icon: Newspaper, label: "Blog" },
   { to: "/cms/people", icon: UserCircle, label: "Our People" },
   { to: "/cms/media", icon: Image, label: "Media" },
   { to: "/cms/forms", icon: MessageSquareText, label: "Feedback" },
-  { to: "/cms/notebooks", icon: BookOpen, label: "Notebooks" },
-  { to: "/cms/users", icon: Users, label: "Users" },
-  { to: "/cms/analytics", icon: BarChart3, label: "Analytics" },
-  { to: "/cms/appearance", icon: Palette, label: "Appearance" },
+  { to: "/cms/users", icon: Users, label: "Users", adminOnly: true },
+  { to: "/cms/security", icon: Shield, label: "Security", adminOnly: true },
+  { to: "/cms/analytics", icon: BarChart3, label: "Analytics", adminOnly: true },
 ];
 
 export default function CMSLayout() {
@@ -88,7 +86,9 @@ export default function CMSLayout() {
 
         {/* Nav links */}
         <nav className="flex-1 p-2 flex flex-col gap-0.5 overflow-y-auto">
-          {navItems.map((item) => (
+          {navItems
+            .filter((i) => !i.adminOnly || user?.role === "admin")
+            .map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
