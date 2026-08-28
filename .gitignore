@@ -31,4 +31,6 @@ db/
 notes/
 docs/
 scripts/
+*.crt
+*.pem
 
