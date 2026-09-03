@@ -123,10 +123,17 @@ export const blogApi = {
 export const peopleApi = {
   list: () => api.get('/people'),
   listAll: () => api.get('/people/all'),
+  get: (id: string) => api.get(`/people/${id}`),
   byRole: (role: string) => api.get(`/people?role=${role}`),
   create: (data: unknown) => api.post('/people', data),
   update: (id: string, data: unknown) => api.put(`/people/${id}`, data),
   delete: (id: string) => api.delete(`/people/${id}`),
+}
+
+// Runtime errors (client-side logs, admin viewer)
+export const runtimeErrorsApi = {
+  list: () => api.get('/runtime-errors'),
+  clear: () => api.delete('/runtime-errors'),
 }
 
 // Authors (searchable, create-if-not-found)

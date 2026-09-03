@@ -14,6 +14,7 @@ const KumbiVote = lazy(() => import('@/components/pages/KumbiVote'))
 const Blog = lazy(() => import('@/components/pages/Blog'))
 const BlogPostPage = lazy(() => import('@/components/pages/BlogPost'))
 const About = lazy(() => import('@/components/pages/About'))
+const PersonDetail = lazy(() => import('@/components/pages/PersonDetail'))
 const Volunteer = lazy(() => import('@/components/pages/Volunteer'))
 const Login = lazy(() => import('@/components/pages/Login'))
 const ForgotPassword = lazy(() => import('@/components/pages/ForgotPassword'))
@@ -33,6 +34,7 @@ const CMSNotebooks = lazy(() => import('@/components/cms/Notebooks'))
 const CMSBlog = lazy(() => import('@/components/cms/Blog'))
 const CMSSiteContent = lazy(() => import('@/components/cms/SiteContent'))
 const CMSPeople = lazy(() => import('@/components/cms/People'))
+const CMSRuntimeErrors = lazy(() => import('@/components/cms/RuntimeErrors'))
 const CMSSecurity = lazy(() => import('@/components/cms/Security'))
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
@@ -81,6 +83,8 @@ export default function App() {
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPostPage />} />
             <Route path="/about" element={<About />} />
+            <Route path="/people/:id" element={<PersonDetail />} />
+            <Route path="/about/:id" element={<PersonDetail />} />
             <Route path="/contact" element={<Home />} />
             <Route path="/volunteer" element={<Volunteer />} />
             <Route path="/n/:slug" element={<PublicNotebookPage />} />
@@ -110,6 +114,7 @@ export default function App() {
               <Route path="blog" element={<CMSBlog />} />
               <Route path="site-content" element={<CMSSiteContent />} />
               <Route path="people" element={<CMSPeople />} />
+              <Route path="runtime-errors" element={<ProtectedRoute allowedRoles={["admin"]}><CMSRuntimeErrors /></ProtectedRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

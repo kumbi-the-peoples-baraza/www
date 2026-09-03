@@ -75,14 +75,13 @@ export default function Navbar() {
             </svg>
           </button>
 
-          {/* Logo */}
+          {/* Logo — theme-aware wrapper ensures visibility on light/dim/dark */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl flex bg-green-100  items-center justify-center font-black">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-card border border-border shadow-sm logo-glow">
               <span id="logo"></span>
             </div>
             <span
-              className="font-black text-xl items-center tracking-tight hidden sm:block"
-              style={{ color: "hsl(var(--nav-fg))" }}
+              className="font-black text-xl items-center tracking-tight hidden sm:block logo-text"
             >
               Kumbi
             </span>
@@ -174,12 +173,11 @@ export default function Navbar() {
                 style={{ borderColor: "hsl(var(--nav-border))" }}
               >
                 <Link to="/" className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-black text-base">
-                    K
+                  <div className="w-9 h-9 rounded-xl bg-card border border-border shadow-sm logo-glow flex items-center justify-center">
+                    <span id="logo"></span>
                   </div>
                   <span
-                    className="font-black text-xl tracking-tight"
-                    style={{ color: "hsl(var(--nav-fg))" }}
+                    className="font-black text-xl tracking-tight logo-text"
                   >
                     Kumbi
                   </span>

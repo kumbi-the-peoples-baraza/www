@@ -1,0 +1,83 @@
+# ════════════════════════════════════════════════════════════════════════════
+# TLS — mkcert for dev/test, explicit external for staging/prod
+# ═══════════════════════════════════════════════════════════════════════════
+
+.PHONY: tls tls-check
+
+# Certificate status check.
+tls-check: _ensure-context
+	@mkdir -p $(LOGS_DIR) && { \
+	  case "$(ENV)" in \
+	    prod) \
+	      echo "$(INFO) TLS: handled externally (no in-cluster certificates)."; \
+	      ;; \
+	    dev|test) \
+	      echo "$(INFO) $(ENV) uses mkcert (locally managed). Checking secret kumbi-tls..."; \
+	      bash scripts/check-tls.sh "$(NAMESPACE)" kumbi-tls ;; \
+	    staging) \
+	      echo "$(INFO) staging uses external TLS (no cert-manager). Checking secret kumbi-tls..."; \
+	      bash scripts/check-tls.sh "$(NAMESPACE)" kumbi-tls ;; \
+	  esac; \
+  	} $(call tee,tls-check)
+
+FORCE ?= false
+
+.PHONY: tls certs tls-force force
+tls: _ensure-context _ensure-envsubst ensure-tools
+	@mkdir -p $(LOGS_DIR) && { \
+	  case "$(ENV)" in \
+	    prod) \
+	      echo "$(INFO) TLS: handled externally (no in-cluster certificates)."; \
+	      echo "$(INFO) Run your external certificate provisioning (e.g., cert-manager, Let's Encrypt, cloud provider) and ensure secret 'kumbi-tls' exists in namespace $(NAMESPACE)."; \
+	      exit 0; \
+	      ;; \
+	    staging) \
+	      echo "$(INFO) Staging uses external TLS. Ensure secret 'kumbi-tls' exists in $(NAMESPACE)."; \
+	      exit 0; \
+	      ;; \
+	    dev|test) \
+	      echo "$(INFO) Provisioning TLS certificate for $(DOMAIN) (ENV=$(ENV)) via mkcert..."; \
+	      cert_secret=kumbi-tls; \
+	      if [ "$(FORCE)" = "true" ]; then \
+	        echo "$(INFO) FORCE: removing existing secret $$cert_secret (if any)..."; \
+	        $(KUBECTL_BASE) delete secret $$cert_secret --ignore-not-found; \
+	      elif $(KUBECTL_BASE) get secret $$cert_secret >/dev/null 2>&1; then \
+	        _regen=0; \
+	        if command -v openssl >/dev/null 2>&1; then \
+	          _san=$$( $(KUBECTL_BASE) get secret $$cert_secret -o jsonpath='{.data.tls\.crt}' 2>/dev/null \
+	                    | base64 -d 2>/dev/null | openssl x509 -noout -ext subjectAltName 2>/dev/null || true ); \
+	          if printf '%s' "$$_san" | grep -q "DNS:$(DOMAIN)" && printf '%s' "$$_san" | grep -q "DNS:api.$(DOMAIN)"; then \
+	            echo "$(WARN) Secret $$cert_secret already exists for $(DOMAIN) — NOT overwriting."; \
+	            echo "$(WARN) Run 'make tls FORCE=true' to re-issue."; \
+	            exit 0; \
+	          else \
+	            echo "$(WARN) Secret $$cert_secret exists but is NOT for $(DOMAIN) — regenerating..."; \
+	            _regen=1; \
+	          fi; \
+	        else \
+	          echo "$(WARN) Secret $$cert_secret already exists in $(NAMESPACE) — NOT overwriting (openssl unavailable to verify)."; \
+	          echo "$(WARN) Run 'make tls FORCE=true' to re-issue."; \
+	          exit 0; \
+	        fi; \
+	        if [ "$$_regen" = "1" ]; then \
+	          $(KUBECTL_BASE) delete secret $$cert_secret --ignore-not-found; \
+	        fi; \
+	      fi; \
+	      echo "$(INFO) Provisioning TLS certificate for $(DOMAIN) (ENV=$(ENV)) via mkcert..."; \
+	      scripts/generate-mkcert.sh "$(ENV)" "$(NAMESPACE)"; \
+	      ;; \
+	    *) \
+	      echo "$(WARN) Unknown environment: $(ENV). Skipping TLS provisioning."; exit 1 ;; \
+	  esac; \
+	  echo "$(INFO) TLS provisioning complete for $(ENV)."; \
+	} $(call tee,tls)
+
+tls-force:
+	@$(MAKE) tls FORCE=true
+
+force:
+	@$(MAKE) tls FORCE=true
+
+.PHONY: certs
+certs: tls
+	@true

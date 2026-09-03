@@ -12,6 +12,7 @@ import {
   Globe,
   UserCircle,
   Shield,
+  Bug,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
@@ -29,6 +30,7 @@ const navItems = [
   { to: "/cms/users", icon: Users, label: "Users", adminOnly: true },
   { to: "/cms/security", icon: Shield, label: "Security", adminOnly: true },
   { to: "/cms/analytics", icon: BarChart3, label: "Analytics", adminOnly: true },
+  { to: "/cms/runtime-errors", icon: Bug, label: "Runtime Logs", adminOnly: true },
 ];
 
 export default function CMSLayout() {
@@ -65,7 +67,7 @@ export default function CMSLayout() {
               <div className="w-8 h-8 rounded-xl logo-glow flex items-center justify-center shrink-0">
                 <span id="logo"></span>
               </div>
-              <span className="font-black text-sm text-primary tracking-tight">
+              <span className="font-black text-sm text-primary tracking-tight logo-text">
                 Kumbi CMS
               </span>
             </div>

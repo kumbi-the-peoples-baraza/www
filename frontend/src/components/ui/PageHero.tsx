@@ -10,8 +10,8 @@ interface Props {
 
 export default function PageHero({ title, subtitle, tag, img }: Props) {
   return (
-    // pt-16 clears the fixed navbar; mb-10 separates hero from page content
-    <section className="relative pt-16 overflow-hidden mb-10">
+    // pt-16 clears the fixed navbar; mb-6 (≈24px, -16px from mb-10) separates hero from page content
+    <section className="relative pt-16 overflow-hidden mb-6">
       <div className="relative h-64 sm:h-80 lg:h-96 flex items-end">
         <div className="absolute inset-0">
           <img

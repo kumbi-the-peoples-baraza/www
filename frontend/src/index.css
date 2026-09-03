@@ -37,59 +37,59 @@
     --nav-border: 207 55% 72%;
   }
 
-  /* ── Dim — warm incandescent / amber street-light ── */
+  /* ── Dim — warm incandescent / amber street-light — tuned for legibility ── */
   .dim {
-    --background: 38 25% 12%; /* very dark warm brown */
-    --background-low: 38 25% 9%;
-    --foreground: 42 90% 88%; /* warm cream */
-    --primary: 42 95% 58%; /* amber/gold */
-    --primary-foreground: 38 60% 8%;
-    --secondary: 35 80% 48%; /* deeper amber */
-    --secondary-foreground: 38 60% 8%;
-    --muted: 38 20% 18%;
-    --muted-foreground: 42 50% 65%;
-    --accent: 42 95% 58%;
-    --accent-foreground: 38 60% 8%;
-    --destructive: 0 72% 51%;
+    --background: 45 45% 97%; /* cream — warm off-white base */
+    --background-low: 45 30% 94%;
+    --foreground: 45 60% 12%; /* deep cream for text */
+    --primary: 45 85% 62%; /* gold — primary accent */
+    --primary-foreground: 45 30% 8%;
+    --secondary: 38 75% 52%; /* amber — softer secondary */
+    --secondary-foreground: 45 30% 8%;
+    --muted: 45 20% 20%; /* warm gray-mix for card separation */
+    --muted-foreground: 45 15% 65%; /* legible muted text */
+    --accent: 45 80% 58%; /* amber accent */
+    --accent-foreground: 45 30% 8%;
+    --destructive: 15 60% 52%; /* warm red-brown for errors */
     --destructive-foreground: 0 0% 100%;
-    --border: 38 30% 24%;
-    --input: 38 20% 16%;
-    --ring: 42 95% 58%;
-    --card: 38 25% 15%;
-    --card-foreground: 42 90% 88%;
-    --popover: 38 25% 14%;
-    --popover-foreground: 42 90% 88%;
-    --nav-bg: 38 30% 10%;
-    --nav-fg: 42 90% 88%;
-    --nav-border: 38 30% 20%;
+    --border: 45 25% 32%; /* soft warm border */
+    --input: 45 20% 24%;
+    --ring: 45 85% 62%;
+    --card: 45 35% 20%; /* warm card background */
+    --card-foreground: 45 60% 88%;
+    --popover: 45 30% 18%;
+    --popover-foreground: 45 60% 88%;
+    --nav-bg: 45 30% 12%;
+    --nav-fg: 45 60% 88%;
+    --nav-border: 45 30% 22%;
   }
 
-  /* ── Dark — true black, electric blue accents ── */
+  /* ── Dark — deep sky blue & cheerful azure — tuned for legibility ── */
   .dark {
-    --background: 0 0% 6%;
-    --background-low: 0 0% 2%;
-    --foreground: 210 100% 97%;
-    --primary: 222 85% 62%;
+    --background: 0 0% 7%;
+    --background-low: 0 0% 3%;
+    --foreground: 0 0% 95%; /* warm off-white */
+    --primary: 200 92% 55%; /* deep sky blue — brilliant equatorial midday sky */
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 30% 22%;
-    --secondary-foreground: 210 100% 97%;
-    --muted: 220 20% 14%;
-    --muted-foreground: 220 15% 60%;
-    --accent: 222 85% 62%;
+    --secondary: 195 78% 46%; /* cheerful azure — vivid not gray */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 66%;
+    --accent: 190 75% 52%; /* light greenish-blue azure */
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 20% 18%;
-    --input: 220 20% 14%;
-    --ring: 222 85% 62%;
+    --border: 0 0% 22%;
+    --input: 0 0% 16%;
+    --ring: 200 92% 55%;
     --radius: 0.75rem;
-    --card: 220 20% 10%;
-    --card-foreground: 210 100% 97%;
-    --popover: 220 20% 10%;
-    --popover-foreground: 210 100% 97%;
-    --nav-bg: 0 0% 6%;
-    --nav-fg: 210 100% 97%;
-    --nav-border: 220 20% 16%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
+    --nav-bg: 0 0% 7%;
+    --nav-fg: 0 0% 95%;
+    --nav-border: 0 0% 20%;
   }
 
   .theme {
@@ -130,12 +130,12 @@
     border: 1px solid rgba(255, 255, 255, 0.8);
   }
   .dim .glass {
-    background: rgba(60, 42, 10, 0.7);
-    border-color: rgba(255, 200, 80, 0.18);
+    background: rgba(245, 235, 215, 0.78);
+    border-color: rgba(180, 140, 40, 0.16);
   }
   .dark .glass {
-    background: rgba(0, 0, 0, 0.72);
-    border-color: rgba(80, 160, 255, 0.18);
+    background: rgba(14, 16, 28, 0.78);
+    border-color: rgba(0, 160, 200, 0.14);
   }
   .glass-card {
     @apply glass rounded-2xl shadow-md;
@@ -294,10 +294,10 @@
   font-size: 1.05rem;
   font-weight: 500;
   border-radius: 10px;
-  border: 2px solid hsl(var(--primary) / 0.4);
+  border: 2px solid hsl(var(--border));
   background: hsl(var(--input));
   color: hsl(var(--foreground));
-  box-shadow: inset 0 2px 6px rgba(17, 35, 161, 0.09);
+  box-shadow: inset 0 1px 3px hsl(var(--foreground) / 0.06);
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
@@ -306,25 +306,24 @@
 .input-field:focus {
   border-color: hsl(var(--primary));
   box-shadow:
-    inset 0 2px 6px rgba(17, 35, 161, 0.09),
-    0 0 0 3px hsl(var(--primary) / 0.18);
+    inset 0 1px 3px hsl(var(--foreground) / 0.06),
+    0 0 0 3px hsl(var(--ring) / 0.18);
 }
 .input-field::placeholder {
-  color: hsl(var(--muted-foreground) / 0.55);
+  color: hsl(var(--muted-foreground) / 0.6);
 }
 
 textarea.input-field {
   min-height: 120px;
   resize: vertical;
-  background: rgba(255, 255, 255, 0.92);
-  border-color: hsl(var(--primary) / 0.5);
-  box-shadow: inset 0 3px 10px rgba(17, 35, 161, 0.1);
+  background: hsl(var(--input));
+  border-color: hsl(var(--border));
+  box-shadow: inset 0 1px 3px hsl(var(--foreground) / 0.06);
 }
-.dim textarea.input-field {
-  background: rgba(60, 42, 10, 0.55);
-}
+.dim textarea.input-field,
 .dark textarea.input-field {
-  background: rgba(10, 15, 40, 0.7);
+  background: hsl(var(--input));
+  border-color: hsl(var(--border));
 }
 
 .form-label {
@@ -355,7 +354,7 @@ textarea.input-field {
     hsl(var(--secondary)) 100%
   );
   box-shadow:
-    0 4px 18px rgba(17, 35, 161, 0.28),
+    0 4px 18px hsl(var(--primary) / 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
   cursor: pointer;
   transition:
@@ -367,7 +366,7 @@ textarea.input-field {
 .btn-primary:hover:not(:disabled) {
   filter: brightness(1.12);
   box-shadow:
-    0 6px 24px rgba(17, 35, 161, 0.38),
+    0 6px 24px hsl(var(--primary) / 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 .btn-primary:active:not(:disabled) {
@@ -382,19 +381,81 @@ textarea.input-field {
   height: 28px;
   background-image: url("assets/favicon.webp");
   background-size: contain;
-  filter: drop-shadow(0 0 2px hsl(var(--background)));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: hsl(130 55% 28%);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+  box-shadow:
+    0 3px 6px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
-.dim #logo,
+.dim #logo {
+  background-image: url("assets/favicon.webp");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: hsl(45 50% 85%);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  box-shadow:
+    0 3px 6px rgba(80, 50, 10, 0.35),
+    0 1px 2px rgba(80, 50, 10, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
 .dark #logo {
-  filter: drop-shadow(0 0 3px hsl(var(--background) / 0.6)) brightness(1.15);
+  background-image: url("assets/favicon.webp");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: hsl(195 70% 42%);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.4));
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.5),
+    0 1px 3px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 /* ── Logo glow — subtle halo behind the logo container ── */
 .logo-glow {
-  background: hsl(var(--primary) / 0.1);
+  background: hsl(130 55% 28%);
   box-shadow:
-    0 0 16px hsl(var(--primary) / 0.2),
-    0 0 40px hsl(var(--primary) / 0.08);
+    0 0 12px hsl(130 55% 38% / 0.25),
+    0 0 24px hsl(130 55% 38% / 0.1);
+}
+.dim .logo-glow {
+  background: hsl(45 50% 85%);
+  box-shadow:
+    0 0 12px hsl(45 60% 60% / 0.3),
+    0 0 24px hsl(45 60% 60% / 0.1);
+}
+.dark .logo-glow {
+  background: hsl(195 70% 42%);
+  box-shadow:
+    0 0 12px hsl(195 70% 52% / 0.3),
+    0 0 24px hsl(195 70% 52% / 0.12);
+}
+
+/* ── Logo text "Kumbi" — theme-aware color ── */
+.logo-text {
+  color: hsl(var(--nav-fg));
+}
+.dim .logo-text {
+  color: hsl(var(--foreground));
+}
+.dark .logo-text {
+  color: hsl(190 60% 75%);
 }
 
 /* ── Overlay form labels — dark gradient text like the panel header ── */
@@ -421,13 +482,13 @@ textarea.input-field {
 .overlay-panel textarea.input-field {
   border-width: 2.5px;
   border-color: hsl(var(--primary) / 0.55);
-  box-shadow: inset 0 2px 6px rgba(10, 26, 107, 0.06);
+  box-shadow: inset 0 2px 6px hsl(var(--foreground) / 0.04);
 }
 .overlay-panel input.input-field:focus,
 .overlay-panel textarea.input-field:focus {
   border-color: hsl(var(--primary));
   box-shadow:
-    inset 0 2px 6px rgba(10, 26, 107, 0.06),
+    inset 0 2px 6px hsl(var(--foreground) / 0.04),
     0 0 0 3px hsl(var(--primary) / 0.18);
 }
 
@@ -443,20 +504,22 @@ textarea.input-field {
 
 /* ── CMS sidebar logo glow — solid bright bg + theme-aware shadow ── */
 .cms-logo-glow {
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
-  box-shadow: 0 2px 8px rgba(10, 26, 107, 0.3);
+  background: linear-gradient(135deg, hsl(130 55% 28%) 0%, hsl(130 45% 38%) 100%);
+  box-shadow: 0 2px 8px rgba(30, 80, 30, 0.3);
 }
 .dim .cms-logo-glow {
+  background: linear-gradient(135deg, hsl(45 85% 62%) 0%, hsl(38 75% 52%) 100%);
   box-shadow:
-    0 0 0 1px rgba(255, 200, 80, 0.15),
-    0 0 12px rgba(255, 200, 80, 0.2),
-    0 0 24px rgba(255, 200, 80, 0.08);
+    0 0 0 1px rgba(180, 140, 40, 0.15),
+    0 0 12px rgba(180, 140, 40, 0.2),
+    0 2px 8px rgba(180, 140, 40, 0.15);
 }
 .dark .cms-logo-glow {
+  background: linear-gradient(135deg, hsl(195 70% 42%) 0%, hsl(200 90% 52%) 100%);
   box-shadow:
-    0 0 0 1px rgba(80, 160, 255, 0.15),
-    0 0 12px rgba(80, 160, 255, 0.2),
-    0 0 24px rgba(80, 160, 255, 0.08);
+    0 0 0 1px rgba(0, 160, 200, 0.15),
+    0 0 12px rgba(0, 160, 200, 0.2),
+    0 2px 8px rgba(0, 160, 200, 0.15);
 }
 
 /* ── Theme-aware markdown content (projects/trace README) ── */

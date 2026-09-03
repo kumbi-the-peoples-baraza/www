@@ -67,6 +67,7 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 	authorsH := handlers.NewAuthorsHandler(db)
 	passwordResetH := handlers.NewPasswordResetHandler(db, cfg, emailSvc)
 	securityH := handlers.NewSecurityHandler(db)
+	runtimeH := handlers.NewRuntimeHandler(db)
 
 	v1 := r.Group("/api/v1")
 
@@ -102,8 +103,11 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 		mediaH.List(c)
 	})
 
+	v1.POST("/runtime-errors", runtimeH.Record)
+
 	// Public people (published only)
 	v1.GET("/people", peopleH.List)
+	v1.GET("/people/:id", peopleH.Get)
 
 	// ── Protected CMS ────────────────────────────────────────────────────────
 	cms := v1.Group("/", middleware.Auth(cfg.JWTSecret))
@@ -169,6 +173,10 @@ func Setup(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *gin.Engine
 		// Authors (searchable, create-if-not-found)
 		cms.GET("/authors", authorsH.Search)
 		cms.GET("/authors/:id", authorsH.Get)
+
+		// Runtime errors (admin only) — super simple viewer for client-side errors like CAPTCHA
+		cms.GET("/runtime-errors", middleware.RequireRole("admin"), runtimeH.List)
+		cms.DELETE("/runtime-errors", middleware.RequireRole("admin"), runtimeH.Clear)
 
 		// Security (admin only)
 		cms.GET("/security/sessions", middleware.RequireRole("admin"), securityH.GetSessions)

@@ -110,6 +110,28 @@ func (h *PeopleHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "updated"})
 }
 
+func (h *PeopleHandler) Get(c *gin.Context) {
+	id := c.Param("id")
+	var pid, name, position, bio string
+	var portrait *string
+	var published bool
+	var order int
+	var createdAt interface{}
+	err := h.db.QueryRow(c, `SELECT `+peopleCols+` FROM people WHERE id=$1`, id).Scan(&pid, &name, &position, &bio, &portrait, &published, &order, &createdAt)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "person not found"})
+		return
+	}
+	if !c.GetBool("authenticated") && !published {
+		c.JSON(http.StatusNotFound, gin.H{"error": "person not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id": pid, "name": name, "position": position, "bio": bio, "portrait": portrait,
+		"published": published, "order": order, "createdAt": createdAt,
+	})
+}
+
 func (h *PeopleHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	h.db.Exec(c, `DELETE FROM people WHERE id=$1`, id)

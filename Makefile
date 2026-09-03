@@ -36,11 +36,13 @@ endif
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── Ingress controller ──────────────────────────────────────────────────────────
-# F5 NGINX Ingress Controller (nginx-ingress namespace) is the single ingress for
-# all environments (dev/test/staging/prod). It runs with hostNetwork and listens
-# on the host ingress ports defined in kumbi-app-config (INGRESS_HTTP_PORT /
-# INGRESS_HTTPS_PORT, default 12080 / 12443). An optional separate host nginx can
-# forward 80/443 → those ports (see infra/host/nginx-stream.conf).
+# Default k3s stack: flannel (CNI) + servicelb (klipper-lb) + Traefik ingress.
+# Traefik runs in kube-system (Service type LoadBalancer via servicelb) and
+# binds 80/443 on the node. Ingress resources use ingressClassName: traefik
+# (see infra/k8s/base/ingress.yaml). Host ports INGRESS_HTTP_PORT /
+# INGRESS_HTTPS_PORT (default 80 / 443) are published by the Traefik
+# LoadBalancer Service; optional host nginx forwarding is generally unnecessary
+# (see infra/host/nginx-stream.conf for the optional passthrough).
 
 # ── Privilege escalation ──────────────────────────────────────────────────────
 # AGENTS.md forbids sudo — never prompt for a password. If nerdctl needs root,
@@ -73,24 +75,22 @@ BUILDKIT_SVC  ?= buildkit
 BUILDKIT_PORT ?= 1234
 
 HELM ?= helm
-# F5 NGINX Ingress Controller (nginxinc/kubernetes-ingress), installed via its
-# official helm chart so missing deps are fetched by `make` itself.
-NGINX_IC_NS           ?= nginx-ingress
-NGINX_IC_CHART        ?= nginx-stable/nginx-ingress
-NGINX_IC_CHART_VERSION?= 2.6.4
-NGINX_IC_IMAGE        ?= nginx/nginx-ingress:5.5.4
-NGINX_IC_IMAGE_TAG    ?= 5.5.4
+# Default k3s ingress: Traefik (installed by k3s in kube-system).
+# Traefik Service is type LoadBalancer; servicelb (klipper-lb) fulfills it.
+TRAEFIK_NS            ?= kube-system
+TRAEFIK_SVC           ?= traefik
 
 # ── Build tool ────────────────────────────────────────────────────────────────
 # Prefer host buildkitd (systemd) if available, otherwise in-cluster buildkit.
 BUILDKIT_TCP_ADDR := $(shell \
   ip=$$($(KUBECTL) get svc -n $(BUILDKIT_NS) $(BUILDKIT_SVC) -o jsonpath='{.spec.clusterIP}' 2>/dev/null); \
+  if [ -z "$$ip" ] || [ "$$ip" = "None" ]; then ip=$$($(KUBECTL) get svc -n $(BUILDKIT_NS) buildkitd -o jsonpath='{.spec.clusterIP}' 2>/dev/null); fi; \
   if [ -n "$$ip" ] && [ "$$ip" != "None" ] && [ "$$ip" != "" ]; then echo "tcp://$$ip:$(BUILDKIT_PORT)"; fi)
 
 BUILD_TOOL := $(shell \
   if [ -S /run/buildkit/buildkitd.sock ] && command -v buildctl >/dev/null 2>&1 && timeout 2 buildctl --addr unix:///run/buildkit/buildkitd.sock debug workers >/dev/null 2>&1; then echo buildctl; \
-  elif [ -n "$(BUILDKIT_TCP_ADDR)" ] && command -v buildctl >/dev/null 2>&1 && timeout 2 buildctl --addr $(BUILDKIT_TCP_ADDR) debug workers >/dev/null 2>&1; then echo buildctl; \
-  elif command -v nerdctl >/dev/null 2>&1; then echo nerdctl; \
+  elif command -v nerdctl >/dev/null 2>&1 && [ -n "$(CONTAINERD_ADDRESS)" ]; then echo nerdctl; \
+  elif [ -n "$(BUILDKIT_TCP_ADDR)" ] && command -v buildctl >/dev/null 2>&1; then echo buildctl; \
   elif command -v docker >/dev/null 2>&1; then echo docker; \
   elif command -v podman >/dev/null 2>&1; then echo podman; \
   elif command -v buildah >/dev/null 2>&1; then echo buildah; \
@@ -104,23 +104,16 @@ BUILDKIT_ADDR := $(shell \
 BUILDKIT_SOCK := $(BUILDKIT_ADDR)
 
 USE_HOST_BUILDKIT := $(shell [ -S /run/buildkit/buildkitd.sock ] && timeout 2 buildctl --addr unix:///run/buildkit/buildkitd.sock debug workers >/dev/null 2>&1 && echo yes || echo no)
-USE_BUILDKIT := $(shell [ "$(BUILD_TOOL)" = "buildctl" ] && echo yes || echo no)
+USE_BUILDKIT := $(shell \
+  if [ -S /run/buildkit/buildkitd.sock ] && timeout 2 buildctl --addr unix:///run/buildkit/buildkitd.sock debug workers >/dev/null 2>&1; then echo yes; \
+  elif [ -n "$(BUILDKIT_TCP_ADDR)" ]; then echo yes; \
+  else echo no; fi)
 
 # ── Containerd socket (for direct build into k3s containerd) ───────────────
 # Auto-detected by probing each candidate — prefer k3s ctr, ctr, crictl, nerdctl.
-CONTAINERD_ADDRESS ?= $(shell \
-  for sock in \
-    /run/k3s/containerd/containerd.sock \
-    /var/run/k3s/containerd/containerd.sock \
-    /var/run/docker/containerd/containerd.sock \
-    /run/containerd/containerd.sock; \
-  do \
-    [ -S "$$sock" ] || continue; \
-    if timeout 3 k3s ctr --address "$$sock" images list >/dev/null 2>&1; then echo "$$sock" && break; fi; \
-    if timeout 3 ctr --address "$$sock" images list >/dev/null 2>&1; then echo "$$sock" && break; fi; \
-    if timeout 3 crictl --runtime-endpoint "unix://$$sock" images >/dev/null 2>&1; then echo "$$sock" && break; fi; \
-    if timeout 3 $(SUDO) nerdctl --address "$$sock" version >/dev/null 2>&1; then echo "$$sock" && break; fi; \
-  done 2>/dev/null)
+unexport CONTAINERD_ADDRESS
+CONTAINERD_ADDRESS := /run/k3s/containerd/containerd.sock
+# Never use rootless containerd — k3s is privileged via /run/k3s/containerd/containerd.sock
 CONTAINERD_ADDRESS := $(CONTAINERD_ADDRESS)
 
 # Can we build directly into k3s containerd? (buildctl+buildkitd or nerdctl)
@@ -129,20 +122,9 @@ CAN_DIRECT_BUILD := $(shell \
   elif [ "$(BUILD_TOOL)" = "buildctl" ] && [ -n "$(CONTAINERD_ADDRESS)" ]; then echo yes; \
   else echo no; fi)
 
-# ── Image import command (for non-nerdctl builds) — prefer k3s ctr, ctr, crictl
-_import_cmd := $(shell \
-  if command -v k3s >/dev/null 2>&1 && k3s ctr images list >/dev/null 2>&1; then echo "k3s ctr images import -"; \
-  elif command -v ctr >/dev/null 2>&1 && ctr --address "$(CONTAINERD_ADDRESS)" images list >/dev/null 2>&1; then echo "ctr --address $(CONTAINERD_ADDRESS) images import -"; \
-  elif command -v crictl >/dev/null 2>&1; then echo "crictl import -"; \
-  elif [ -n "$(CONTAINERD_ADDRESS)" ]; then echo "$(SUDO) nerdctl --address $(CONTAINERD_ADDRESS) image import -"; \
-  else echo "cat >/dev/null"; fi)
-
-_prune_cmd := $(shell \
-  if command -v k3s >/dev/null 2>&1 && k3s ctr images list >/dev/null 2>&1; then echo "k3s ctr images rm"; \
-  elif command -v ctr >/dev/null 2>&1 && ctr --address "$(CONTAINERD_ADDRESS)" images list >/dev/null 2>&1; then echo "ctr --address $(CONTAINERD_ADDRESS) images rm"; \
-  elif command -v crictl >/dev/null 2>&1; then echo "crictl rmi"; \
-  elif [ -n "$(CONTAINERD_ADDRESS)" ]; then echo "$(SUDO) nerdctl --address $(CONTAINERD_ADDRESS) image remove"; \
-  else echo "true"; fi)
+# ── Image import — unprivileged k3s only (no rootless fallback), ignore env CONTAINERD_ADDRESS
+_import_cmd := env -u CONTAINERD_ADDRESS k3s ctr images import -
+_prune_cmd := env -u CONTAINERD_ADDRESS k3s ctr images rm
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Configuration
@@ -183,10 +165,12 @@ IMG_TAG   := $(ENV)
 OVERLAY   := infra/k8s/overlays/$(ENV)
 SECRETS   := $(OVERLAY)/secrets.yaml
 
-# F5 NGINX Ingress Controller readiness: the controller Deployment must be Ready
-# and the host ports (INGRESS_HTTP_PORT/INGRESS_HTTPS_PORT) must be bound on the
-# node. Hard-fails on timeout.
-NGINX_IC_WAIT_TIMEOUT ?= 180
+# Traefik readiness: the controller Deployment must be Ready and the
+# host ports (INGRESS_HTTP_PORT/INGRESS_HTTPS_PORT) must be bound on the
+# node via servicelb (klipper-lb). Hard-fails on timeout.
+TRAEFIK_WAIT_TIMEOUT ?= 180
+# Back-compat alias
+NGINX_IC_WAIT_TIMEOUT ?= $(TRAEFIK_WAIT_TIMEOUT)
 
 # Safety: reject any kubectl command that forgot -n $(NAMESPACE)
 KUBECTL_BASE := $(KUBECTL) -n $(NAMESPACE)
@@ -216,13 +200,13 @@ ROLL_IMG := $(shell \
 SECRET_BATCH := $(shell scripts/yaml-batch-get.sh "$(SECRETS)" 2>/dev/null)
 
 DOMAIN := $(or $(word 1,$(SECRET_BATCH)),$(ENV_DOMAIN_$(ENV)))
-# Hostname served by the F5 NGINX ingress (per-environment public host).
+# Hostname served by Traefik ingress (per-environment public host).
 GATEWAY_HOST := $(DOMAIN)
 
-# Host ingress ports the F5 NGINX IC binds (and that the optional host nginx
-# forwards 80/443 to). Configured in kumbi-app-config.
-INGRESS_HTTP_PORT  := $(or $(word 2,$(SECRET_BATCH)),12080)
-INGRESS_HTTPS_PORT := $(or $(word 3,$(SECRET_BATCH)),12443)
+# Host ingress ports published by Traefik's LoadBalancer Service via servicelb
+# (klipper-lb). On stock k3s these are 80/443. Configured in kumbi-app-config.
+INGRESS_HTTP_PORT  := $(or $(word 2,$(SECRET_BATCH)),80)
+INGRESS_HTTPS_PORT := $(or $(word 3,$(SECRET_BATCH)),443)
 
 # ── Persistent volume host paths (per overlay secrets.yaml) ──────────────────
 # Word positions MUST match scripts/yaml-batch-get.sh output order:
@@ -250,10 +234,6 @@ ENV_DOMAIN_prod    := kumbike.org
 SETUP_FIREWALL ?= false
 
 # ── Infra versions ─────────────────────────────────────────────────────────────
-CERT_MANAGER_VERSION  ?= v1.16.3
-
-CERT_MANAGER_URL  := https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
-
 LOGS_DIR  := logs
 TS        := $(shell date +%Y%m%d-%H%M%S)
 
@@ -367,10 +347,10 @@ help:
 	@echo "                                     Force re-issue/overwrite the TLS secret"
 	@echo "    make tls-check ENV=..            Show certificate issuance status"
 	@echo ""
-	@echo "  $(BOLD)Ingress (F5 NGINX)$(RESET)"
-	@echo "    F5 NGINX Ingress Controller — single front door for all envs"
-	@echo "    make buildkit     Ensure in-cluster buildkit + registry pods"
-	@echo "    make k3s-check    Verify k3s config compliance (no envoy/cilium/traefik)"
+	@echo "  $(BOLD)Ingress (Traefik — default k3s)$(RESET)"
+	@echo "    Traefik via servicelb (klipper-lb) — single front door for all envs"
+	@echo "    make buildkit     Ensure systemd buildkit is responsive"
+	@echo "    make k3s-check    Verify k3s default stack (flannel/servicelb/traefik)"
 	@echo ""
 	@echo "  $(BOLD)Management$(RESET)"
 	@echo "    make rollout  ENV=.. [CONTAINER=backend|frontend|postgres|all]"
@@ -378,7 +358,7 @@ help:
 	@echo "    make create-user ENV=.. NAME=.. EMAIL=.. PASS=.. [ROLE=admin]"
 	@echo "    make status   ENV=..   Cluster + pod status"
 	@echo "    make status-pods      Pods only"
-	@echo "    make status-ingress   Ingress/Gateway/HTTPRoute only"
+	@echo "    make status-ingress   Ingress/Traefik only"
 	@echo "    make status-nodes     Nodes only"
 	@echo "    make status-pv        PV/PVC only"
 	@echo "    make ports    ENV=..   Show ingress/egress port mappings"
@@ -390,8 +370,13 @@ help:
 	@echo "    make nuke     ENV=.. PRESERVE=true  Spare PVCs/PVs/certs"
 	@echo "    make teardown ENV=..   Delete namespace (prompts)"
 	@echo ""
+	@echo "  $(BOLD)Setup (k3s + buildkit + registry)$(RESET)"
+	@echo "    make setup [IP=.. TOKEN=..]     Install k3s (flannel vxlan, prompts IP/token) + buildkit + registry + kubectl"
+	@echo "    make setup-deps                 Install frontend/backend deps only (bun install / go mod download)"
+	@echo "    make setup-k3s                  k3s install step only"
+	@echo "    make setup-buildkit             buildkit install step only"
+	@echo ""
 	@echo "  $(BOLD)Other$(RESET)"
-	@echo "    make setup     Install frontend/backend dependencies"
 	@echo "    make test      Run tests"
 	@echo "    make lint      Run linters"
 	@echo "    make check-config   Validate secrets.yaml + generate DATABASE_URL"
@@ -401,15 +386,38 @@ help:
 	@echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Setup / Dependencies
+# Setup / Dependencies — k3s + buildkit + registry + kubectl
 # ══════════════════════════════════════════════════════════════════════════════
 
-.PHONY: setup
+# make setup — interactive k3s install (flannel vxlan) + buildkit + registry + kubectl + deps
+# Prompts for node IP and k3s token if not provided via IP=/TOKEN= env.
+# On Linux: installs k3s via get.k3s.io, configures embedded registry (5000),
+# mirrors in /etc/rancher/k3s/registries.yaml, installs buildkitd as systemd
+# socket (minimal toml pointing at /run/k3s/containerd/containerd.sock),
+# sets CONTAINERD_ADDRESS, installs kubectl if missing.
+# On macOS: installs buildkit/kubectl/gettext via brew, OCI worker config,
+# skips k3s systemd (use k3d).
+# Usage:
+#   make setup                          # interactive prompt IP + token
+#   make setup IP=10.100.0.1 TOKEN=xxx  # non-interactive
+#   IP=10.0.0.5 TOKEN=xxx make setup
+.PHONY: setup setup-deps setup-k3s setup-buildkit
 setup:
+	@bash setup.sh
+
+# Backwards-compat: install frontend/backend deps only (no k3s)
+setup-deps:
 	@$(call log,Installing frontend dependencies...)
 	cd frontend && bun install
 	@$(call log,Downloading backend modules...)
 	cd backend && go mod download
+
+# Granular k3s / buildkit steps (also called by `make setup`)
+setup-k3s:
+	@bash setup.sh 2>&1 | tail -50
+
+setup-buildkit:
+	@bash -c 'OS=$$(uname -s); if [ "$$OS" = "Darwin" ]; then echo "[setup] macOS buildkit via brew..."; brew install buildkit 2>&1 | tail -5; else echo "[setup] Linux buildkit systemd..."; bash setup.sh 2>&1 | grep -A2 buildkit; fi'
 
 .PHONY: test
 test:
@@ -542,98 +550,71 @@ cluster-delete: ensure-tools
 # Ingress controller (bare-metal / NodePort)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── Ingress controller (F5 NGINX Ingress Controller, all envs)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Ingress controller (Traefik — default k3s, all envs)
+# ═════════════════════════════════════════════════════════════════════════════
 
 .PHONY: _ensure-ingress _ensure-deps _ensure-hostroute
 
-# Download + install any missing cluster dependencies via helm. Idempotent.
-# cert-manager is required for TLS; the F5 NGINX IC chart repo is also ensured
-# so `make _ensure-ingress` can fetch it.
+# Helm deps: not required for default k3s (Traefik is bundled). Keep as no-op
+# for backwards compatibility; cert-manager if used is installed separately.
 _ensure-deps: _ensure-context
 	@mkdir -p $(LOGS_DIR) && { \
-	  echo "$(INFO) Ensuring helm dependency repos..."; \
-	  $(HELM) repo add jetstack https://charts.jetstack.io --force-update 2>/dev/null || true; \
-	  $(HELM) repo add nginx-stable https://helm.nginx.com/stable --force-update 2>/dev/null || true; \
-	  $(HELM) repo update 2>/dev/null || true; \
-	  if ! $(KUBECTL) get ns cert-manager >/dev/null 2>&1; then \
-	    echo "$(INFO) Installing cert-manager $(CERT_MANAGER_VERSION) via helm..."; \
-	    $(HELM) upgrade --install cert-manager jetstack/cert-manager \
-	      -n cert-manager --create-namespace --version $(CERT_MANAGER_VERSION) \
-	      --set crds.enabled=true --wait --timeout 180s; \
-	    echo "$(INFO) cert-manager installed"; \
-	  else \
-	    echo "$(INFO) cert-manager already present — skipping"; \
-	  fi; \
+	  echo "$(INFO) Default k3s — no extra helm repos required (Traefik bundled)."; \
 	} $(call tee,ensure-deps)
 
-# Ensure front-door ingress controller / Gateway API.
-# If Cilium Gateway API (or another GatewayClass) is present, we use Gateway API.
-# Otherwise, fall back to installing F5 NGINX Ingress Controller.
+# Ensure front-door ingress controller (Traefik via servicelb).
+# Default k3s ships Traefik in kube-system as a LoadBalancer Service fulfilled
+# by servicelb (klipper-lb). This target is idempotent and never installs
+# Cilium/Gateway API/F5 NGINX — it only verifies Traefik is present.
 _ensure-ingress: _ensure-context _ensure-deps
 	@mkdir -p $(LOGS_DIR) && { \
-	  if $(KUBECTL) get gatewayclass cilium >/dev/null 2>&1 || $(KUBECTL) get gatewayclasses >/dev/null 2>&1; then \
-	    echo "$(INFO) Cilium Gateway API detected (GatewayClass available) — skipping NGINX Ingress Controller installation"; \
+	  if $(KUBECTL) -n $(TRAEFIK_NS) get svc $(TRAEFIK_SVC) >/dev/null 2>&1; then \
+	    echo "$(INFO) Traefik detected ($(TRAEFIK_NS)/$(TRAEFIK_SVC)) — servicelb will publish 80/443"; \
+	    _r=$$($(KUBECTL) -n $(TRAEFIK_NS) get deploy traefik -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0); \
+	    _r=$${_r:-0}; \
+	    if [ "$$_r" -ge 1 ] 2>/dev/null; then echo "$(INFO) Traefik Deployment ready ($$_r replicas)"; else echo "$(INFO) Traefik Deployment not yet ready (replicas: $$_r) — will wait in _wait-ingress"; fi; \
+	  elif $(KUBECTL) -n kube-system get svc traefik >/dev/null 2>&1; then \
+	    echo "$(INFO) Traefik Service found in kube-system — using default k3s ingress"; \
 	  else \
-	    echo "$(INFO) Ensuring F5 NGINX Ingress Controller via helm ($(NGINX_IC_CHART) $(NGINX_IC_CHART_VERSION))..."; \
-	    _helm_rel=$$($(KUBECTL) -n $(NGINX_IC_NS) get deploy nginx-ingress-controller \
-	                -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true); \
-	    if [ "$$_helm_rel" != "nginx-ingress" ]; then \
-	      echo "$(INFO) Controller not helm-owned — removing so helm can adopt it..."; \
-	      $(KUBECTL) -n $(NGINX_IC_NS) delete deployment nginx-ingress-controller --ignore-not-found >/dev/null 2>&1 || true; \
-	      $(KUBECTL) -n $(NGINX_IC_NS) delete svc nginx-ingress-controller --ignore-not-found >/dev/null 2>&1 || true; \
-	    fi; \
-	    $(HELM) upgrade --install nginx-ingress $(NGINX_IC_CHART) \
-	      -n $(NGINX_IC_NS) --create-namespace --version $(NGINX_IC_CHART_VERSION) \
-	      --set controller.image.repository=nginx/nginx-ingress \
-	      --set controller.image.tag=$(NGINX_IC_IMAGE_TAG) \
-	      --set controller.hostNetwork=false \
-	      --set controller.hostPort.enable=true \
-	      --set controller.hostPort.http=$(INGRESS_HTTP_PORT) \
-	      --set controller.hostPort.https=$(INGRESS_HTTPS_PORT) \
-	      --set controller.containerPort.http=80 \
-	      --set controller.containerPort.https=443 \
-	      --set controller.service.create=false \
-	      --set controller.ingressClass.name=nginx \
-	      --set controller.ingressClass.create=true \
-	      --set controller.ingressClass.setAsDefaultIngress=true \
-	      --wait --timeout $(NGINX_IC_WAIT_TIMEOUT)s; \
-	    echo "$(INFO) F5 NGINX Ingress Controller ensured (host ports $(INGRESS_HTTP_PORT)/$(INGRESS_HTTPS_PORT))"; \
+	    echo "$(WARN) Traefik Service not found in $(TRAEFIK_NS)/$(TRAEFIK_SVC)"; \
+	    echo "$(WARN) Default k3s should provide Traefik. If missing, re-install k3s without --disable=traefik"; \
+	    echo "$(WARN) or install Traefik via helm: helm upgrade --install traefik traefik/traefik -n kube-system --create-namespace"; \
 	  fi; \
+	  echo "$(INFO) IngressClass traefik should be present:"; \
+	  $(KUBECTL) get ingressclass traefik -o wide 2>/dev/null || echo "  (IngressClass traefik not yet available)"; \
 	} $(call tee,ensure-ingress)
 
-# Wait for front door (Gateway API or NGINX Ingress Controller) to be ready.
-.PHONY: _wait-nginx-ingress
-_wait-nginx-ingress: _ensure-context
-	@echo "$(INFO) Waiting up to $(NGINX_IC_WAIT_TIMEOUT)s for front-door ingress / Gateway API..."
-	@_ready=0; _deadline=$$(( $$(date +%s) + $(NGINX_IC_WAIT_TIMEOUT) )); \
+# Wait for front door (Traefik) to be ready.
+.PHONY: _wait-nginx-ingress _wait-ingress _wait-traefik
+_wait-nginx-ingress: _wait-ingress
+_wait-traefik: _wait-ingress
+_wait-ingress: _ensure-context
+	@echo "$(INFO) Waiting up to $(TRAEFIK_WAIT_TIMEOUT)s for Traefik ingress..."
+	@_ready=0; _deadline=$$(( $$(date +%s) + $(TRAEFIK_WAIT_TIMEOUT) )); \
 	while [ $$(date +%s) -lt $$_deadline ]; do \
-	  if $(KUBECTL_BASE) get gateway kumbi-gateway >/dev/null 2>&1; then \
-	    _g_status=$$($(KUBECTL_BASE) get gateway kumbi-gateway -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}' 2>/dev/null || echo ""); \
-	    if [ "$$_g_status" = "True" ]; then _ready=1; break; fi; \
-	    _g_acc=$$($(KUBECTL_BASE) get gateway kumbi-gateway -o jsonpath='{.status.conditions[?(@.type=="Accepted")].status}' 2>/dev/null || echo ""); \
-	    if [ "$$_g_acc" = "True" ]; then _ready=1; break; fi; \
-	    _ready=1; break; \
-	  elif $(KUBECTL) -n $(NGINX_IC_NS) get deploy nginx-ingress-controller >/dev/null 2>&1; then \
-	    _r=$$($(KUBECTL) -n $(NGINX_IC_NS) get deploy nginx-ingress-controller -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0); \
-	    _r=$${_r:-0}; \
-	    if [ "$$_r" -ge 1 ] 2>/dev/null; then _ready=1; break; fi; \
-	  fi; \
+	  _r=$$($(KUBECTL) -n $(TRAEFIK_NS) get deploy traefik -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0); \
+	  _r=$${_r:-0}; \
+	  if [ "$$_r" -ge 1 ] 2>/dev/null; then _ready=1; break; fi; \
+	  _r2=$$($(KUBECTL) -n kube-system get deploy traefik -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0); \
+	  _r2=$${_r2:-0}; \
+	  if [ "$$_r2" -ge 1 ] 2>/dev/null; then _ready=1; break; fi; \
 	  sleep 3; \
 	done; \
-	echo "$(INFO) Front door is ready"
+	if [ "$$_ready" = "1" ]; then echo "$(INFO) Traefik is ready"; else echo "$(WARN) Traefik not ready within $(TRAEFIK_WAIT_TIMEOUT)s — check: kubectl -n kube-system get pods,svc -l app.kubernetes.io/name=traefik"; fi
 
 # Wire an optional host-side nginx to forward 80/443 to the front-door host ports.
+# With default k3s + servicelb, Traefik already binds 80/443 via its LoadBalancer
+# Service, so this is rarely needed. Kept for users who run an extra host nginx.
 _ensure-hostroute: _ensure-context
 	@mkdir -p $(LOGS_DIR) && { \
 	  export INGRESS_HTTP_PORT=$(INGRESS_HTTP_PORT); \
 	  export INGRESS_HTTPS_PORT=$(INGRESS_HTTPS_PORT); \
 	  if ! command -v nginx >/dev/null 2>&1; then \
-	    echo "$(INFO) Host nginx not found — Cilium Gateway API binds directly."; \
+	    echo "$(INFO) Host nginx not found — Traefik via servicelb binds directly to 80/443."; \
 	  elif ! systemctl is-active --quiet nginx 2>/dev/null; then \
-	    echo "$(INFO) Host nginx present but not active — optional."; \
+	    echo "$(INFO) Host nginx present but not active — optional (Traefik already on 80/443)."; \
 	  else \
-	    echo "$(INFO) Host nginx detected — wiring stream routing 80→$(INGRESS_HTTP_PORT) / 443→$(INGRESS_HTTPS_PORT)..."; \
+	    echo "$(INFO) Host nginx detected — optional passthrough 80→$(INGRESS_HTTP_PORT) / 443→$(INGRESS_HTTPS_PORT)..."; \
 	    mkdir -p /etc/nginx/conf.d 2>/dev/null && \
 	    envsubst < infra/host/nginx-stream.conf > /etc/nginx/conf.d/kumbi-$(ENV).conf 2>/dev/null && \
 	    nginx -t >/dev/null 2>&1 && \
@@ -644,7 +625,7 @@ _ensure-hostroute: _ensure-context
 	  if [ "$(SETUP_FIREWALL)" = "true" ]; then \
 	    echo "$(INFO) SETUP_FIREWALL=true requires root — run firewall commands manually."; \
 	  else \
-	    echo "$(INFO) Firewall unchanged (SETUP_FIREWALL!=true). Ensure $(INGRESS_HTTP_PORT)/$(INGRESS_HTTPS_PORT) (and 80/443 if using host nginx) are open."; \
+	    echo "$(INFO) Firewall unchanged (SETUP_FIREWALL!=true). Ensure $(INGRESS_HTTP_PORT)/$(INGRESS_HTTPS_PORT) (and 80/443) are open."; \
 	  fi; \
 	} $(call tee,ensure-hostroute)
 
@@ -672,27 +653,53 @@ buildkit: _ensure-context
 # k3s config compliance
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Verify the cluster is compliant with Kumbi setup:
+# Verify the cluster is compliant with Kumbi setup (default k3s: flannel/servicelb/traefik):
 .PHONY: k3s-check
 k3s-check: _ensure-context
 	@echo "$(BOLD)═══ k3s config compliance — $(ENV) ═══$(RESET)"; \
 	_fail=0; \
-	echo "$(BOLD)Controllers / Gateway:$(RESET)"; \
-	if $(KUBECTL) get gatewayclasses >/dev/null 2>&1; then \
-	  echo "  ✓ Gateway API CRDs and GatewayClasses present"; \
-	elif $(KUBECTL) get ns $(NGINX_IC_NS) >/dev/null 2>&1; then \
-	  echo "  ✓ $(NGINX_IC_NS) present"; \
+	echo "$(BOLD)CNI / LB / Ingress (default k3s):$(RESET)"; \
+	if $(KUBECTL) -n kube-system get pods -l app=flannel 2>/dev/null | grep -q flannel; then \
+	  echo "  ✓ flannel CNI present (kube-system)"; \
+	elif $(KUBECTL) -n kube-system get pods 2>/dev/null | grep -q flannel; then \
+	  echo "  ✓ flannel CNI present"; \
 	else \
-	  echo "  $(WARN) Neither Gateway API nor $(NGINX_IC_NS) detected"; \
+	  echo "  $(WARN) flannel not detected — expected default k3s CNI (check: kubectl -n kube-system get pods -l app=flannel)"; \
+	fi; \
+	if $(KUBECTL) -n kube-system get pods -l app=svclb-traefik 2>/dev/null | grep -q svclb || $(KUBECTL) -n kube-system get pods 2>/dev/null | grep -q svclb; then \
+	  echo "  ✓ servicelb (klipper-lb) present (svclb-traefik)"; \
+	else \
+	  echo "  $(WARN) servicelb not detected — expected default k3s LoadBalancer (check: kubectl -n kube-system get pods | grep svclb)"; \
+	fi; \
+	if $(KUBECTL) -n $(TRAEFIK_NS) get svc $(TRAEFIK_SVC) >/dev/null 2>&1 || $(KUBECTL) -n kube-system get svc traefik >/dev/null 2>&1; then \
+	  echo "  ✓ Traefik Service present ($(TRAEFIK_NS)/$(TRAEFIK_SVC))"; \
+	else \
+	  echo "  $(WARN) Traefik Service not detected — expected default k3s ingress"; \
+	fi; \
+	if $(KUBECTL) get ingressclass traefik >/dev/null 2>&1; then \
+	  echo "  ✓ IngressClass traefik present"; \
+	else \
+	  echo "  $(WARN) IngressClass traefik missing — check k3s install (should not have --disable=traefik)"; \
+	fi; \
+	if $(KUBECTL) -n kube-system get pods -l app.kubernetes.io/name=traefik 2>/dev/null | grep -q traefik || $(KUBECTL) -n kube-system get pods -l app=traefik 2>/dev/null | grep -q traefik; then \
+	  echo "  ✓ Traefik pods running"; \
+	else \
+	  echo "  $(WARN) Traefik pods not detected — check: kubectl -n kube-system get pods -l app.kubernetes.io/name=traefik"; \
 	fi; \
 	if [ -S /run/buildkit/buildkitd.sock ]; then \
-	  echo "  ✓ Host buildkitd systemd socket (/run/buildkit/buildkitd.sock) present"; \
+	  echo "  ✓ Host buildkitd systemd socket (/run/buildkit/buildkitd.sock) present (kept)"; \
 	elif $(KUBECTL) get ns $(BUILDKIT_NS) >/dev/null 2>&1; then \
 	  echo "  ✓ In-cluster $(BUILDKIT_NS) present"; \
 	else \
-	  echo "  $(WARN) buildkit not detected (host socket or namespace)"; \
+	  echo "  $(WARN) buildkit not detected (host socket or namespace) — systemd buildkit remains expected"; \
 	fi; \
-	echo "$(INFO) k3s check completed."
+	if $(KUBECTL) get gatewayclasses >/dev/null 2>&1; then \
+	  echo "  $(WARN) Gateway API CRDs still present — not needed for default k3s (Traefik Ingress used)"; \
+	fi; \
+	if $(KUBECTL) get ns cilium-gateway >/dev/null 2>&1 || $(KUBECTL) get ns nginx-ingress >/dev/null 2>&1; then \
+	  echo "  $(WARN) Legacy ingress namespace (cilium-gateway/nginx-ingress) still exists — clean up if reverting fully"; \
+	fi; \
+	echo "$(INFO) k3s check completed — expected: flannel + servicelb + traefik."
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Persistent storage
@@ -751,16 +758,25 @@ _validate-pvcs: _ensure-context
 	    fi; \
 	    echo "$(INFO) PVC $$pvc is Bound"; \
 	  done; \
-	  echo "$(INFO) Testing /app/storage writability..."; \
-	  $(KUBECTL_BASE) delete pod storage-test --ignore-not-found 2>/dev/null || true; \
-	  if ! $(KUBECTL_BASE) run storage-test --restart=Never --image=busybox:1.36 \
-	    --overrides='{"spec":{"volumes":[{"name":"storage","persistentVolumeClaim":{"claimName":"storage-pvc"}}],"containers":[{"name":"test","image":"busybox:1.36","command":["sh","-c","echo test > /mnt/test.txt && cat /mnt/test.txt && rm /mnt/test.txt && echo ok"],"volumeMounts":[{"name":"storage","mountPath":"/mnt"}]}]}}' \
-	    --attach 2>&1 | grep -q ok; then \
-	    echo "$(ERR) /app/storage writability test failed"; \
-	    $(KUBECTL_BASE) delete pod storage-test --ignore-not-found 2>/dev/null || true; \
-	    exit 1; \
-	  fi; \
-	  $(KUBECTL_BASE) delete pod storage-test --ignore-not-found 2>/dev/null || true; \
+  echo "$(INFO) Testing /app/storage writability..."; \
+  $(KUBECTL_BASE) delete pod storage-test --ignore-not-found 2>/dev/null || true; \
+  $(KUBECTL_BASE) run storage-test --restart=Never --image=busybox:1.36 \
+    --overrides='{"spec":{"volumes":[{"name":"storage","persistentVolumeClaim":{"claimName":"storage-pvc"}}],"containers":[{"name":"test","image":"busybox:1.36","command":["sh","-c","echo test > /mnt/test.txt && cat /mnt/test.txt && rm /mnt/test.txt && echo ok"],"volumeMounts":[{"name":"storage","mountPath":"/mnt"}]}]}}' >/dev/null 2>&1; \
+  _ok=0; \
+  for i in 1 2 3 4 5 6 7 8 9 10; do \
+    _phase=$$($(KUBECTL_BASE) get pod storage-test -o jsonpath='{.status.phase}' 2>/dev/null || echo ""); \
+    if [ "$$_phase" = "Succeeded" ] || [ "$$_phase" = "Completed" ]; then _ok=1; break; fi; \
+    if [ "$$_phase" = "Failed" ]; then break; fi; \
+    sleep 1; \
+  done; \
+  if [ "$$_ok" != "1" ] || ! $(KUBECTL_BASE) logs storage-test 2>&1 | grep -q ok; then \
+    echo "$(ERR) /app/storage writability test failed"; \
+    $(KUBECTL_BASE) logs storage-test 2>&1 || true; \
+    $(KUBECTL_BASE) describe pod storage-test 2>&1 | tail -30 || true; \
+    $(KUBECTL_BASE) delete pod storage-test --ignore-not-found 2>/dev/null || true; \
+    exit 1; \
+  fi; \
+  $(KUBECTL_BASE) delete pod storage-test --ignore-not-found 2>/dev/null || true; \
 	  echo "$(INFO) /app/storage writability OK"; \
 	} $(call tee,validate-pvcs)
 
@@ -778,71 +794,57 @@ _validate-postgres: _ensure-context
 	  echo "$(INFO) PostgreSQL connectivity OK"; \
 	} $(call tee,validate-postgres)
 
-# ═════════════════════════════════════════════════════════════════════════════
-# TLS / Cert-Manager
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
+# TLS — mkcert for dev/test, explicit external for staging/prod
+# ═══════════════════════════════════════════════════════════════════════════
 
-.PHONY: tls install-cert-manager _ensure-issuers tls-check
+.PHONY: tls tls-check
 
-install-cert-manager: _ensure-deps
-	@true
-	} $(call tee,install-cert-manager)
-
-_ensure-issuers: _ensure-context _ensure-envsubst install-cert-manager
-	@mkdir -p $(LOGS_DIR) && { \
-	  export ACME_EMAIL=$(ACME_EMAIL); \
-	  echo "$(INFO) Applying ClusterIssuers (selfsigned + staging + prod)..."; \
-	  for i in 1 2 3 4 5 6 7 8 9 10; do \
-	    if envsubst < infra/k8s/tls/cluster-issuer.yaml | $(KUBECTL) apply -f - 2>/tmp/.issuer-apply-err; then \
-	      rm -f /tmp/.issuer-apply-err; break; \
-	    fi; \
-	    err=$$(cat /tmp/.issuer-apply-err); \
-	    if echo "$$err" | grep -q "no endpoints available for service.*cert-manager-webhook\|connection refused"; then \
-	      echo "$(WARN) cert-manager webhook not ready, retrying in 10s (attempt $$i/10)..."; sleep 10; \
-	    else echo "$$err" >&2; rm -f /tmp/.issuer-apply-err; exit 1; fi; \
-	  done; \
-	  echo "$(INFO) ClusterIssuers ready"; \
-	} $(call tee,ensure-issuers)
-
-# Certificate status check (staging / production especially).
+# Certificate status check.
 tls-check: _ensure-context
 	@mkdir -p $(LOGS_DIR) && { \
 	  case "$(ENV)" in \
 	    prod) \
-	      echo "$(INFO) TLS: no in-cluster certificates (handled externally)."; \
+	      echo "$(INFO) TLS: handled externally (no in-cluster certificates)."; \
 	      ;; \
 	    dev|test) \
 	      echo "$(INFO) $(ENV) uses mkcert (locally managed). Checking secret kumbi-tls..."; \
 	      bash scripts/check-tls.sh "$(NAMESPACE)" kumbi-tls ;; \
 	    staging) \
-	      echo "$(INFO) staging uses cert-manager. Checking kumbi-tls-cert..."; \
-	      bash scripts/check-tls.sh "$(NAMESPACE)" kumbi-tls-cert kumbi-tls-cert ;; \
+	      echo "$(INFO) staging uses external TLS (no cert-manager). Checking secret kumbi-tls..."; \
+	      bash scripts/check-tls.sh "$(NAMESPACE)" kumbi-tls ;; \
 	  esac; \
- 	} $(call tee,tls-check)
+  	} $(call tee,tls-check)
 
 FORCE ?= false
 
 .PHONY: tls certs tls-force force
 tls: _ensure-context _ensure-envsubst ensure-tools
 	@mkdir -p $(LOGS_DIR) && { \
-	  if [ "$(ENV)" = "prod" ]; then \
-	    echo "$(INFO) TLS: skipped (handled externally)."; \
-	    exit 0; \
-	  fi; \
-	  cert_secret=$$( [ "$(ENV)" = "dev" ] || [ "$(ENV)" = "test" ] && echo kumbi-tls || echo kumbi-tls-cert ); \
-	  if [ "$(FORCE)" = "true" ]; then \
-	    echo "$(INFO) FORCE: removing existing secret $$cert_secret (if any)..."; \
-	    $(KUBECTL_BASE) delete secret $$cert_secret --ignore-not-found; \
-	  elif $(KUBECTL_BASE) get secret $$cert_secret >/dev/null 2>&1; then \
-	    _regen=0; \
-	    case "$(ENV)" in \
-	      dev|test) \
+	  case "$(ENV)" in \
+	    prod) \
+	      echo "$(INFO) TLS: handled externally (no in-cluster certificates)."; \
+	      echo "$(INFO) Run your external certificate provisioning (e.g., cert-manager, Let's Encrypt, cloud provider) and ensure secret 'kumbi-tls' exists in namespace $(NAMESPACE)."; \
+	      exit 0; \
+	      ;; \
+	    staging) \
+	      echo "$(INFO) Staging uses external TLS. Ensure secret 'kumbi-tls' exists in $(NAMESPACE)."; \
+	      exit 0; \
+	      ;; \
+	    dev|test) \
+	      echo "$(INFO) Provisioning TLS certificate for $(DOMAIN) (ENV=$(ENV)) via mkcert..."; \
+	      cert_secret=kumbi-tls; \
+	      if [ "$(FORCE)" = "true" ]; then \
+	        echo "$(INFO) FORCE: removing existing secret $$cert_secret (if any)..."; \
+	        $(KUBECTL_BASE) delete secret $$cert_secret --ignore-not-found; \
+	      elif $(KUBECTL_BASE) get secret $$cert_secret >/dev/null 2>&1; then \
+	        _regen=0; \
 	        if command -v openssl >/dev/null 2>&1; then \
 	          _san=$$( $(KUBECTL_BASE) get secret $$cert_secret -o jsonpath='{.data.tls\.crt}' 2>/dev/null \
 	                    | base64 -d 2>/dev/null | openssl x509 -noout -ext subjectAltName 2>/dev/null || true ); \
 	          if printf '%s' "$$_san" | grep -q "DNS:$(DOMAIN)" && printf '%s' "$$_san" | grep -q "DNS:api.$(DOMAIN)"; then \
 	            echo "$(WARN) Secret $$cert_secret already exists for $(DOMAIN) — NOT overwriting."; \
-	            echo "$(WARN) Run 'make tls force' to re-issue."; \
+	            echo "$(WARN) Run 'make tls FORCE=true' to re-issue."; \
 	            exit 0; \
 	          else \
 	            echo "$(WARN) Secret $$cert_secret exists but is NOT for $(DOMAIN) — regenerating..."; \
@@ -850,36 +852,19 @@ tls: _ensure-context _ensure-envsubst ensure-tools
 	          fi; \
 	        else \
 	          echo "$(WARN) Secret $$cert_secret already exists in $(NAMESPACE) — NOT overwriting (openssl unavailable to verify)."; \
-	          echo "$(WARN) Run 'make tls force' to re-issue."; \
+	          echo "$(WARN) Run 'make tls FORCE=true' to re-issue."; \
 	          exit 0; \
-	        fi ;; \
-	      *) \
-	        echo "$(WARN) Secret $$cert_secret already exists in $(NAMESPACE) — NOT overwriting."; \
-	        echo "$(WARN) Run 'make tls force' to re-issue."; \
-	        exit 0 ;; \
-	    esac; \
-	    if [ "$$_regen" = "1" ]; then \
-	      $(KUBECTL_BASE) delete secret $$cert_secret --ignore-not-found; \
-	    fi; \
-	  fi; \
-	  echo "$(INFO) Provisioning TLS certificate for $(DOMAIN) (ENV=$(ENV))..."; \
-	  case "$(ENV)" in \
-	    dev|test) \
-	      echo "$(INFO) Using mkcert for local $(ENV) certificate (domain from secrets.yaml: $(DOMAIN))..."; \
+	        fi; \
+	        if [ "$$_regen" = "1" ]; then \
+	          $(KUBECTL_BASE) delete secret $$cert_secret --ignore-not-found; \
+	        fi; \
+	      fi; \
+	      echo "$(INFO) Provisioning TLS certificate for $(DOMAIN) (ENV=$(ENV)) via mkcert..."; \
 	      scripts/generate-mkcert.sh "$(ENV)" "$(NAMESPACE)"; \
-	      ;; \
-	    staging) \
-	      echo "$(INFO) Ensuring cert-manager + issuers for ACME (staging)..."; \
-	      $(MAKE) install-cert-manager _ensure-issuers ENV=$(ENV); \
-	      echo "$(INFO) Creating Certificate resource for staging..."; \
-	      envsubst < infra/k8s/tls/certificate-$(ENV).yaml.tpl | $(KUBECTL_BASE) apply -f -; \
-	      echo "$(INFO) Waiting for Let's Encrypt (staging) certificate..."; \
-	      $(KUBECTL_BASE) wait --for=condition=Ready certificate/kumbi-tls-cert --timeout=300s; \
 	      ;; \
 	    *) \
 	      echo "$(WARN) Unknown environment: $(ENV). Skipping TLS provisioning."; exit 1 ;; \
 	  esac; \
-	  echo "$(INFO) F5 NGINX Ingress Controller is managed by 'make _ensure-ingress' (helm)."; \
 	  echo "$(INFO) TLS provisioning complete for $(ENV)."; \
 	} $(call tee,tls)
 
@@ -892,7 +877,6 @@ force:
 .PHONY: certs
 certs: tls
 	@true
-
 # ══════════════════════════════════════════════════════════════════════════════
 # Build
 # ══════════════════════════════════════════════════════════════════════════════
@@ -937,7 +921,7 @@ build:
 # overlay's secrets.yaml (kumbi-app-config) via the Makefile config block, so the
 # Ingress hostname is configured in secrets.yaml. envsubst is given an explicit
 # variable list so secret values (which may contain '$') are never touched.
-_kustomize = $(KUBECTL) kustomize $(OVERLAY) 2>/dev/null | envsubst '$${DOMAIN}'
+_kustomize = DOMAIN="$(DOMAIN)" $(KUBECTL) kustomize $(OVERLAY) 2>/dev/null | envsubst '$${DOMAIN}'
 
 # PRESERVE=true spares PVCs, PVs, and TLS certificates during deploy nuke.
 PRESERVE ?= false
@@ -970,8 +954,8 @@ $(MAKE) _ensure-ingress ENV=$(ENV); \
   echo "$(INFO) Applying kustomize overlay..."; \
   $(_kustomize) | $(KUBECTL_BASE) apply -f -; \
   $(MAKE) _validate-pvcs ENV=$(ENV) || { echo "$(ERR) PVC validation failed — aborting deploy" >&2; exit 1; }; \
-  echo "$(INFO) === Front door: waiting for front door (up to $(NGINX_IC_WAIT_TIMEOUT)s)..."; \
-  $(MAKE) _wait-nginx-ingress ENV=$(ENV) || { echo "$(ERR) Front door not ready — aborting deploy" >&2; exit 1; }; \
+  echo "$(INFO) === Front door: waiting for Traefik (up to $(TRAEFIK_WAIT_TIMEOUT)s)..."; \
+  $(MAKE) _wait-ingress ENV=$(ENV) || { echo "$(ERR) Traefik not ready — aborting deploy" >&2; exit 1; }; \
   echo "$(INFO) === Step 1/3: Force-replacing Postgres..."; \
   $(call force-rollout,postgres,30s); \
   echo "$(INFO) === Step 2/3: Force-replacing Backend..."; \
@@ -998,8 +982,8 @@ refresh: check-config _ensure-context
 	  $(KUBECTL) create namespace $(NAMESPACE) --dry-run=client -o yaml | $(KUBECTL) apply -f - >/dev/null 2>&1; \
 	  echo "$(INFO) Applying kustomize overlay..."; \
 	  $(_kustomize) | $(KUBECTL) apply -f -; \
-	  echo "$(INFO) Front door: waiting for front door (up to $(NGINX_IC_WAIT_TIMEOUT)s)..."; \
-	  $(MAKE) _wait-nginx-ingress ENV=$(ENV) || { echo "$(ERR) Front door not ready — aborting refresh" >&2; exit 1; }; \
+	  echo "$(INFO) Front door: waiting for Traefik (up to $(TRAEFIK_WAIT_TIMEOUT)s)..."; \
+	  $(MAKE) _wait-ingress ENV=$(ENV) || { echo "$(ERR) Traefik not ready — aborting refresh" >&2; exit 1; }; \
 	  echo "$(INFO) Rolling out for IMG=$(IMG)..."; \
 	  case "$(IMG)" in \
 	    all|backend) $(call force-rollout,backend,60s) ;; \
@@ -1130,14 +1114,14 @@ rollout: _ensure-context
 # Ingress ports — how host traffic reaches the services
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Report the front-door mapping: host nginx (optional) 80/443 → F5 NGINX IC
-# host ports (INGRESS_HTTP_PORT/INGRESS_HTTPS_PORT) → Ingress routes → services.
+# Report the front-door mapping: Traefik (kube-system, LoadBalancer via servicelb)
+# host ports 80/443 → Ingress (traefik) → services.
 .PHONY: _report-ports
 _report-ports: _ensure-context
-	@echo "$(BOLD)═══ Ingress front-door — $(ENV) ═══$(RESET)"; \
+	@echo "$(BOLD)═══ Ingress front-door (Traefik + servicelb) — $(ENV) ═══$(RESET)"; \
 	echo "  Public host : $(GATEWAY_HOST)"; \
-	echo "  F5 NGINX IC : namespace $(NGINX_IC_NS), host ports http=$(INGRESS_HTTP_PORT) https=$(INGRESS_HTTPS_PORT)"; \
-	echo "  Optional host nginx: 80 → $(INGRESS_HTTP_PORT) , 443 → $(INGRESS_HTTPS_PORT)"; \
+	echo "  Traefik     : namespace $(TRAEFIK_NS), service $(TRAEFIK_SVC) (LoadBalancer via servicelb) ports http=$(INGRESS_HTTP_PORT) https=$(INGRESS_HTTPS_PORT)"; \
+	echo "  CNI / LB    : flannel + servicelb (klipper-lb) — default k3s"; \
 	echo ""; \
 	echo "  https://$(GATEWAY_HOST)/        → $(INGRESS_HTTPS_PORT) → frontend:80"; \
 	echo "  https://$(GATEWAY_HOST)/api     → $(INGRESS_HTTPS_PORT) → backend:8080"; \
@@ -1151,20 +1135,21 @@ _report-ports: _ensure-context
 ports: _ensure-context
 	@echo "$(BOLD)═══ Ingress / Egress — $(ENV) / $(NAMESPACE) ═══$(RESET)"; \
 	echo ""; \
-	echo "$(BOLD)F5 NGINX Ingress Controller (host ports):$(RESET)"; \
-	$(KUBECTL) -n $(NGINX_IC_NS) get pods -o wide 2>/dev/null || echo "  (none)"; \
+	echo "$(BOLD)Traefik (kube-system, LoadBalancer via servicelb):$(RESET)"; \
+	$(KUBECTL) -n $(TRAEFIK_NS) get pods,svc -o wide 2>/dev/null || echo "  (none)"; \
+	$(KUBECTL) -n kube-system get svc traefik -o wide 2>/dev/null || true; \
 	echo ""; \
-	echo "$(BOLD)Host ingress ports (kumbi-app-config):$(RESET)"; \
+	echo "$(BOLD)Host ingress ports (kumbi-app-config — Traefik LB):$(RESET)"; \
 	echo "  HTTP  → $(INGRESS_HTTP_PORT)"; \
 	echo "  HTTPS → $(INGRESS_HTTPS_PORT)"; \
 	echo ""; \
-	echo "$(BOLD)Ingress routes:$(RESET)"; \
+	echo "$(BOLD)Ingress routes (ingressClass: traefik):$(RESET)"; \
 	$(KUBECTL_BASE) get ingress -o wide 2>/dev/null || echo "  (none)"; \
 	echo ""; \
 	echo "$(BOLD)IngressClasses:$(RESET)"; \
 	$(KUBECTL) get ingressclass -o wide 2>/dev/null || echo "  (none)"; \
 	echo ""; \
-	echo "$(BOLD)Services (ClusterIP + NodePort):$(RESET)"; \
+	echo "$(BOLD)Services (ClusterIP):$(RESET)"; \
 	$(KUBECTL_BASE) get services -o wide 2>/dev/null || echo "  (none)"; \
 	echo ""; \
 	echo "$(BOLD)Endpoints:$(RESET)"; \
@@ -1256,11 +1241,12 @@ status-secrets: _ensure-context
 	@echo ""
 
 status-ingress: _ensure-context
-	@echo "$(BOLD)F5 NGINX Ingress Controller:$(RESET)"
-	@$(KUBECTL) -n $(NGINX_IC_NS) get pods,deploy -o wide 2>&1 || true
+	@echo "$(BOLD)Traefik (kube-system):$(RESET)"
+	@$(KUBECTL) -n $(TRAEFIK_NS) get pods,deploy,svc -o wide 2>&1 || true
 	@echo ""
-	@echo "$(BOLD)Ingress / IngressClass:$(RESET)"
-	@$(KUBECTL_BASE) get ingress,ingressclass -o wide 2>&1 || true
+	@echo "$(BOLD)Ingress / IngressClass (traefik):$(RESET)"
+	@$(KUBECTL_BASE) get ingress -o wide 2>&1 || true
+	@$(KUBECTL) get ingressclass -o wide 2>&1 || true
 	@echo ""
 
 nodes: _ensure-context
@@ -1268,8 +1254,9 @@ nodes: _ensure-context
 	@$(KUBECTL) get nodes -o wide
 
 ingress: _ensure-context
-	@$(KUBECTL) -n $(NGINX_IC_NS) get pods -o wide 2>&1 || true
+	@$(KUBECTL) -n $(TRAEFIK_NS) get pods,svc -o wide 2>&1 || true
 	@$(KUBECTL_BASE) get ingress -o wide 2>&1 || true
+	@$(KUBECTL) get ingressclass traefik -o wide 2>&1 || true
 
 .PHONY: nuke teardown
 nuke: _ensure-context

@@ -37,10 +37,10 @@ export default function Footer() {
       }}
     >
       <div className="max-w-7xl mx-auto px-6 sm:px-10 pt-16 pb-10 grid grid-cols-1 md:grid-cols-2 gap-12">
-        {/* Brand */}
+        {/* Brand — theme-aware */}
         <div>
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-16 h-16 rounded-xl bg-green-100 flex items-center justify-center font-black text-lg">
+            <div className="w-16 h-16 rounded-xl bg-card border border-border shadow-sm logo-glow flex items-center justify-center font-black text-lg">
               <span id="logo"></span>
             </div>
             <div>

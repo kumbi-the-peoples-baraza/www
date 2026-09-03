@@ -30,64 +30,31 @@ function SubmissionView({ submission, onClose }: { submission: { id: string; dat
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={onClose}
-      style={{ background: 'rgba(8,12,50,0.5)', backdropFilter: 'blur(10px) saturate(1.3)' }}>
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(10px) saturate(1.3)' }}>
       <div onClick={e => e.stopPropagation()}
+        className="glass-card"
         style={{
           width: 'min(90%, 900px)',
           display: 'flex', flexDirection: 'column', maxHeight: '90vh',
           borderRadius: 20,
-          background: `
-            radial-gradient(ellipse 70% 40% at 50% 0%, rgba(255,255,255,0.35) 0%, transparent 100%),
-            linear-gradient(170deg,
-              rgba(255,255,255,0.96) 0%,
-              rgba(235,245,255,0.92) 35%,
-              rgba(210,232,255,0.85) 65%,
-              rgba(190,222,255,0.78) 100%
-            )
-          `,
-          backdropFilter: 'blur(48px) saturate(2.8) brightness(1.25)',
-          WebkitBackdropFilter: 'blur(48px) saturate(2.8) brightness(1.25)',
-          border: '1.5px solid rgba(255,255,255,0.85)',
-          boxShadow: `
-            0 0 0 1px rgba(255,255,255,0.3),
-            0 4px 24px rgba(17,35,161,0.10),
-            0 16px 64px rgba(17,35,161,0.10),
-            0 32px 128px rgba(17,35,161,0.06)
-          `,
+          padding: 0,
         }}>
         <div style={{
           display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
           padding: '1.75rem 2rem 1.25rem',
-          borderBottom: '1px solid rgba(26,59,184,0.08)',
+          borderBottom: '1px solid hsl(var(--border))',
         }}>
           <div>
-            <h2 style={{
-              fontSize: '1.35rem', fontWeight: 900, letterSpacing: '-0.025em',
-              background: 'linear-gradient(135deg, #0A1A6B 0%, #1A3BB8 60%, #3B6FE0 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              margin: 0,
-            }}>
+            <h2 className="text-xl font-bold" style={{ margin: 0, color: 'hsl(var(--primary))' }}>
               {(FORM_LABELS[submission.formType] || submission.formType)} Submission
             </h2>
-            <p style={{
-              fontSize: '0.85rem',
-              color: 'rgba(26,59,184,0.5)',
-              marginTop: '0.25rem',
-              fontWeight: 500,
-            }}>
+            <p className="text-sm" style={{ color: 'hsl(var(--muted-foreground))', marginTop: '0.25rem', fontWeight: 500 }}>
               {new Date(submission.createdAt).toLocaleString()}
             </p>
           </div>
           <button onClick={onClose}
-            className="flex items-center justify-center rounded-lg transition-all duration-150 shrink-0"
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem',
-              color: 'rgba(26,59,184,0.4)',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#DC2626'; e.currentTarget.style.background = 'rgba(220,38,38,0.08)' }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(26,59,184,0.4)'; e.currentTarget.style.background = 'none' }}>
+            className="flex items-center justify-center rounded-lg transition-all duration-150 shrink-0 hover:bg-destructive/10 hover:text-destructive"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', color: 'hsl(var(--muted-foreground))' }}>
             <X className="w-5 h-5" strokeWidth={2.5} />
           </button>
         </div>
@@ -98,15 +65,7 @@ function SubmissionView({ submission, onClose }: { submission: { id: string; dat
                 <label className="form-label capitalize" style={{ fontSize: '0.85rem', marginBottom: '0.3rem' }}>
                   {key.replace(/([A-Z])/g, ' $1').trim()}
                 </label>
-                <div className="whitespace-pre-wrap break-words text-sm leading-relaxed"
-                  style={{
-                    padding: '0.75rem 1rem',
-                    borderRadius: 10,
-                    background: 'rgba(255,255,255,0.55)',
-                    border: '1px solid rgba(26,59,184,0.1)',
-                    color: '#0A1A6B',
-                    fontWeight: 500,
-                  }}>
+                <div className="whitespace-pre-wrap break-words text-sm leading-relaxed input-field" style={{ fontWeight: 500 }}>
                   {String(value)}
                 </div>
               </div>
@@ -115,22 +74,10 @@ function SubmissionView({ submission, onClose }: { submission: { id: string; dat
         </div>
         <div style={{
           padding: '1rem 2rem 1.5rem',
-          borderTop: '1px solid rgba(26,59,184,0.08)',
+          borderTop: '1px solid hsl(var(--border))',
           display: 'flex', justifyContent: 'flex-end',
         }}>
-          <button onClick={onClose}
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-              minHeight: 44, padding: '0.65rem 1.75rem',
-              fontSize: '0.95rem', fontWeight: 800,
-              borderRadius: 10, border: 'none', cursor: 'pointer',
-              background: 'linear-gradient(135deg, #1A3BB8 0%, #3B6FE0 100%)',
-              color: '#fff',
-              boxShadow: '0 2px 12px rgba(26,59,184,0.25)',
-              transition: 'filter 0.15s, box-shadow 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(26,59,184,0.35)' }}
-            onMouseLeave={e => { e.currentTarget.style.filter = ''; e.currentTarget.style.boxShadow = '0 2px 12px rgba(26,59,184,0.25)' }}>
+          <button onClick={onClose} className="btn-primary" style={{ minHeight: 44, padding: '0.65rem 1.75rem', fontSize: '0.95rem' }}>
             Close
           </button>
         </div>

@@ -53,7 +53,7 @@ export default function CMSPeople() {
         <div className="glass-card p-6 flex flex-col gap-5">
           <h2 className="font-black text-lg">{editing.id ? 'Edit Person' : 'New Person'}</h2>
 
-          <ImagePicker label="Portrait" value={editing.portrait || ''} circle onChange={(v) => setEditing({ ...editing, portrait: v })} />
+          <ImagePicker label="Portrait" value={editing.portrait || ''} onChange={(v) => setEditing({ ...editing, portrait: v })} />
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
@@ -111,8 +111,8 @@ export default function CMSPeople() {
                 <tr key={p.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3">
                     {p.portrait
-                      ? <img src={parseImageValue(p.portrait)} alt={p.name} className="w-10 h-10 rounded-full object-cover" />
-                      : <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center font-black text-muted-foreground">{p.name[0]}</div>
+                      ? <img src={parseImageValue(p.portrait)} alt={p.name} className="w-10 h-10 rounded-lg object-cover bg-black" />
+                      : <div className="w-10 h-10 rounded-lg bg-black flex items-center justify-center font-black text-white/80">{p.name[0]}</div>
                     }
                   </td>
                   <td className="px-4 py-3 font-semibold">{p.name}</td>

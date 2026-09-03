@@ -1,30 +1,20 @@
 ---
-# Shared Gateway for all applications — deploy ONCE in platform namespace.
-# Binds hostPort 80/443, terminates TLS, allows HTTPRoutes from all namespaces.
-# Usage: kubectl apply -f infra/platform/gateway.yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: cluster-gateway
-  namespace: cilium-gateway
-spec:
-  gatewayClassName: cilium
-  listeners:
-    - name: http
-      protocol: HTTP
-      port: 80
-      hostPort: 80
-      allowedRoutes:
-        namespaces:
-          from: All
-    - name: https
-      protocol: HTTPS
-      port: 443
-      hostPort: 443
-      tls:
-        mode: Terminate
-        certificateRefs:
-          - name: wildcard-tls   # Replace with your wildcard cert secret name
-      allowedRoutes:
-        namespaces:
-          from: All
+# DEPRECATED — Cilium Gateway API
+# This stack has been reverted to default k3s: flannel (CNI) + servicelb
+# (klipper-lb) + Traefik ingress. Traefik is bundled with k3s in kube-system
+# (Service type LoadBalancer via servicelb) and handles Ingress resources with
+# ingressClassName: traefik (see infra/k8s/base/ingress.yaml).
+#
+# No shared Gateway is needed. This file is kept only as a reference for the
+# previous Cilium-based setup.
+#
+# Previous spec (for history):
+#   kind: Gateway
+#   metadata: {name: cluster-gateway, namespace: cilium-gateway}
+#   spec: {gatewayClassName: cilium, listeners: [http:80 hostPort:80, https:443 ...]}
+#
+# Default k3s equivalent (informational):
+#   - CNI:            flannel (kube-system, DaemonSet)
+#   - LoadBalancer:   servicelb / klipper-lb (kube-system, svclb-traefik)
+#   - Ingress:        Traefik (kube-system/traefik, IngressClass traefik)
+#   No action required — `make deploy` verifies Traefik via `make _ensure-ingress`.

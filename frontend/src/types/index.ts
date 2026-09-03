@@ -75,6 +75,8 @@ export interface Page {
   metadata: Record<string, unknown>;
   notebookId?: string;
   notebook?: Notebook;
+  parentId?: string | null;
+  children?: Page[];
   createdAt: string;
   updatedAt: string;
 }

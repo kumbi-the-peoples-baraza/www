@@ -1,31 +1,32 @@
-# Kumbi routing — F5 NGINX Ingress Controller (host-network ingress).
+# Kumbi routing — default k3s (Traefik + flannel + servicelb).
 #
-# The F5 NGINX Ingress Controller (namespace `nginx-ingress`) is the single
-# front door for all environments. It runs with hostNetwork and binds the host
-# ingress ports directly (no NodePort service, no k3s servicelb):
+# Default k3s stack:
+#   CNI          → flannel (VXLAN, kube-system, DaemonSet)
+#   LoadBalancer → servicelb / klipper-lb (kube-system, svclb-traefik)
+#   Ingress      → Traefik (kube-system/traefik, Service type LoadBalancer)
+#                  IngressClass `traefik` routes to ClusterIP Services.
 #
-#   IngressClass `nginx`                  → controller nginx.org/ingress-controller
-#   F5 NGINX IC Deployment                → binds host ports INGRESS_HTTP_PORT (HTTP) /
-#                                            INGRESS_HTTPS_PORT (HTTPS) from kumbi-app-config
-#                                            (e.g. dev HTTPS 11443, prod HTTPS 30003)
-#   Ingress `kumbi-frontend`             → host ${DOMAIN} / → service frontend:80 (TLS kumbi-tls)
-#   Ingress `kumbi-api`                  → host ${DOMAIN}/api + api.${DOMAIN} → service backend:8080
+#   Ingress `kumbi` (ingressClassName: traefik) — host ${DOMAIN}
+#     /api            → service backend:8080
+#     /app/storage    → service backend:8080
+#     /               → service frontend:80
+#   Plus:
+#     api.${DOMAIN} / → service backend:8080
+#     www.${DOMAIN} / → service frontend:80
 #
-# TLS is terminated in the IC using the kumbi-tls secret (mkcert for dev/test,
-# cert-manager for staging, supplied for prod).
+# TLS is terminated in Traefik using the kumbi-tls secret (mkcert for dev/test,
+# cert-manager for staging, supplied for prod) via Ingress.spec.tls.
 #
-# REACHABILITY (k3s node host IP, IC bound via hostNetwork):
-#   https://kumbi.test/       → node :INGRESS_HTTPS_PORT → F5 NGINX IC → frontend
-#   https://kumbi.test/api    → node :INGRESS_HTTPS_PORT → F5 NGINX IC → backend:8080
-#   https://api.kumbi.test/   → node :INGRESS_HTTPS_PORT → F5 NGINX IC → backend:8080
-#   (INGRESS_HTTPS_PORT is per-overlay: dev 11443, prod 30003; see kumbi-app-config)
+# REACHABILITY (k3s node host IP, Traefik via servicelb):
+#   https://kumbi.test/       → node :443  → Traefik (LoadBalancer) → frontend
+#   https://kumbi.test/api    → node :443  → Traefik → backend:8080
+#   https://api.kumbi.test/   → node :443  → Traefik → backend:8080
+#   (ports 80/443 are Traefik's LoadBalancer ports fulfilled by servicelb;
+#    custom ports can be set via INGRESS_HTTP_PORT/INGRESS_HTTPS_PORT in
+#    kumbi-app-config, but default is 80/443.)
 #
-# Optional host nginx: to publish on the standard 80/443 instead, run a host
-# nginx that forwards 80→INGRESS_HTTP_PORT and 443→INGRESS_HTTPS_PORT (see
-# infra/host/nginx-stream.conf, rendered by `make _ensure-hostroute`). Either way
-# the service exposes itself on the host ingress ports — no need to discover
-# ports after deploy; they are configured in kumbi-app-config (INGRESS_HTTP_PORT
-# / INGRESS_HTTPS_PORT).
+# Optional host nginx passthrough (infra/host/nginx-stream.conf) is generally
+# NOT needed — Traefik already binds 80/443 via servicelb.
 #
-# Verify: `make ports ENV=dev` shows the ingress→service mapping and the host
-# ports; `make k3s-check ENV=dev` confirms envoy/cilium/traefik are absent.
+# Verify: `make ports ENV=dev` shows Traefik + Ingress → Services;
+#         `make k3s-check ENV=dev` confirms flannel + servicelb + traefik.

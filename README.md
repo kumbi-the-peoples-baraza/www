@@ -6,144 +6,287 @@ A civic technology platform for community impact in Nairobi, Kenya. Includes Kum
 
 - **Frontend**: React 18, TypeScript, Vite, Bun, Tailwind CSS, Framer Motion, TanStack Query, Zustand, TipTap, Zod
 - **Backend**: Go, Gin, PostgreSQL, pgx/v5
-- **Infra**: Docker (rootless), k3d (k3s in Docker), Kubernetes, Kustomize, Traefik ingress
+- **Infra**: k3s (systemd, privileged containerd), flannel vxlan, servicelb (klipper-lb), Traefik, Kustomize, BuildKit (systemd), embedded registry
 
-## Quick Start
+## Setup
+
+`make setup` is the single entry point. It prompts for the node IP and k3s token and installs the correct components for the detected OS (Linux `systemd` vs macOS `launchd`/`brew`).
+
+### 1. Install k3s + buildkit + registry + kubectl
 
 ```bash
-# Prerequisites: docker, k3d, kubectl, go 1.23+, bun
-curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-
 git clone <repo> && cd kumbi
-cp infra/k8s/overlays/dev/secrets.yaml.example infra/k8s/overlays/dev/secrets.yaml
-# Edit secrets.yaml — set JWT_SECRET (32+ chars), ALLOW_ORIGIN, and POSTGRES_PASSWORD
 
-make setup          # install deps
-make deploy         # creates k3d cluster, builds images, deploys (ENV=dev by default)
+# Interactive — prompts for IP and token, detects OS, installs everything
+make setup
+
+# Non-interactive — pass via env / make vars
+make setup IP=10.100.0.1 TOKEN=$(openssl rand -hex 32)
+# or
+IP=10.100.0.1 TOKEN=xxx bash setup.sh
 ```
 
-- Frontend + CMS: `http://localhost`
-- API: `http://localhost/api/v1`
-- Admin: credentials from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in secrets.yaml
+What `make setup` / `setup.sh` does:
+
+**Prompt phase**
+- `IP`: `bind-address` / `advertise-address` / `node-ip` / `tls-san` for k3s. Auto-detected from `hostname -I` / `ip route get 8.8.8.8` with `[10.100.0.1]` fallback if not provided. Validates `^[0-9.]+` or hostname.
+- `TOKEN`: k3s join token. Suggests `openssl rand -hex 32` and hides input; generates one non-interactively if no tty.
+
+**On Linux (`uname -s == Linux`)**
+1. **k3s** via `https://get.k3s.io`:
+   ```bash
+   curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+         --bind-address=$IP \
+         --advertise-address=$IP \
+         --node-ip=$IP \
+         --flannel-backend=vxlan \
+         --kubelet-arg=rotate-certificates=true \
+         --tls-san=$IP,$(hostname -f) \
+         --write-kubeconfig-mode=644 \
+         --secrets-encryption \
+         --embedded-registry=true \
+         --token=$TOKEN" sh -
+   ```
+   Copies `/etc/rancher/k3s/k3s.yaml` → `~/.kube/config` (via `sudo` if needed) and waits for `kubectl get nodes`.
+
+2. **kubectl** if missing — symlinks `k3s -> kubectl` or downloads `https://dl.k8s.io/release/stable.txt` for `$(uname -m)` (`amd64`/`arm64`) to `/usr/local/bin/kubectl`.
+
+3. **k3s registry** — writes `/etc/rancher/k3s/registries.yaml` mirroring `docker.io` and `registry.local:5000` → `http://$IP:5000` (embedded registry), then `systemctl restart k3s` if active.
+
+4. **CONTAINERD_ADDRESS** — exports `CONTAINERD_ADDRESS=/run/k3s/containerd/containerd.sock` in current shell and persists to `~/.bashrc`, `~/.zshrc`, `~/.profile`, `/etc/profile.d/k3s-buildkit.sh`, `/etc/environment.d/99-k3s-buildkit.conf`.
+
+5. **buildkit (systemd)** — downloads `moby/buildkit:v0.32.2` for `$ARCH` if missing, installs to `/usr/local/bin`, writes minimal `/etc/buildkit/buildkitd.toml`:
+   ```toml
+   [worker.containerd]
+     enabled = true
+     address = "/run/k3s/containerd/containerd.sock"
+     namespace = "k8s.io"
+   [registry."$IP:5000"]
+     http = true; insecure = true
+   [registry."registry.local:5000"]
+     http = true; insecure = true
+   ```
+   Creates `buildkit.socket` (`ListenStream=%t/buildkit/buildkitd.sock`) and `buildkit.service` (`After=k3s.service ExecStart=/usr/local/bin/buildkitd --config /etc/buildkit/buildkitd.toml`), `daemon-reload` + `enable --now`, verifies `buildctl --addr unix:///run/buildkit/buildkitd.sock debug workers`.
+
+6. **deps** — checks `bun`/`go` (warns with install hints), then `bun install` in `frontend/` and `go mod download` in `backend/` if present. Installs `gettext` (`envsubst`) / `openssl` / `curl` via `apt/dnf/yum/apk` if missing.
+
+**On macOS (`Darwin`)**
+- `brew install buildkit kubectl gettext openssl` if missing, skips `k3s` systemd install (warns `brew install k3d && k3d cluster create`), writes OCI worker `~/.config/buildkit/buildkitd.toml`, starts `brew services start buildkit`.
+
+All steps are idempotent; re-running prompts again but respects `IP=`/`TOKEN=` overrides.
+
+### 2. Configure secrets
+
+```bash
+cp infra/k8s/overlays/dev/secrets.yaml.example infra/k8s/overlays/dev/secrets.yaml
+# Edit: JWT_SECRET (32+ chars), ALLOW_ORIGIN, POSTGRES_PASSWORD, etc.
+# kumbi-app-config ConfigMap in same file sets DOMAIN, API_DOMAIN,
+# INGRESS_HTTP_PORT/INGRESS_HTTPS_PORT (default 80/443), storage paths,
+# replicas, ACME_EMAIL.
+```
+
+Each overlay (`dev`, `test`, `staging`, `prod`) has `secrets.yaml` with `backend-secret` + `postgres-secret` + `kumbi-app-config`. `DATABASE_URL` is generated by `scripts/generate-secrets.sh` from `POSTGRES_*`.
+
+### 3. Deploy
+
+```bash
+make deploy ENV=dev          # nuke → pvs → buildkit → build → apply → wait → rollout
+make deploy ENV=dev PRESERVE=true  # keep PVCs/PVs/TLS
+make check-config ENV=dev     # validate secrets.yaml
+```
+
+See **Environments** and **Make Reference** below.
+
+## Cluster Architecture
+
+Kumbi targets a **real k3s systemd install** (not `k3d`/`kind` in Docker) with the host `containerd` at `/run/k3s/containerd/containerd.sock`. All `kubectl` invocations are scoped to the `kumbi` namespace (or `kumbi-$ENV` for test/staging).
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Host (Linux systemd)                        macOS (brew)       │
+│  ──────────────────────────────────────────   ────────────────  │
+│  k3s server (systemd)                        k3d / colima      │
+│    --bind/advertise/node-ip=$IP              (k3s api only)    │
+│    --flannel-backend=vxlan  → CNI             flannel bridge    │
+│    --embedded-registry=true → :5000          :5000 (k3d)       │
+│    --tls-san=$IP,hostname                                    │
+│    kube-proxy + coredns + metrics-server     same              │
+│                                                                 │
+│  servicelb (klipper-lb, kube-system)         servicelb/k3d LB  │
+│    DaemonSet svclb-traefik → fulfills          → publishes      │
+│    Service type:LoadBalancer (Traefik)        traefik LB        │
+│                                                                 │
+│  Traefik (kube-system/traefik)               Traefik (k3d)     │
+│    Deployment + Service LB 80/443            IngressClass      │
+│    IngressClass: traefik                     traefik            │
+│    Ingress kumbi (infra/k8s/base/ingress.yaml)                  │
+│      host: ${DOMAIN}  → /api,/app/storage → backend:8080        │
+│                         /               → frontend:80            │
+│      host: api.${DOMAIN} → /           → backend:8080           │
+│      tls: secretName=kumbi-tls (mkcert/dev, external/prod)      │
+│                                                                 │
+│  Storage                                                          │
+│    StorageClass kumbi-postgres/kumbi-storage (no-provisioner)   │
+│    PV hostPath → PVC (postgres-pvc/storage-pvc) → Deployments    │
+│    Paths from kumbi-app-config: POSTGRES_DATA_DIR etc.          │
+│                                                                 │
+│  Build plane                                                      │
+│    Host buildkitd (systemd) — /run/buildkit/buildkitd.sock      │
+│      [worker.containerd] address=/run/k3s/containerd/containerd.sock │
+│      registry "$IP:5000" insecure/http, registry.local:5000     │
+│      CONTAINERD_ADDRESS=/run/k3s/containerd/containerd.sock     │
+│    Fallback: in-cluster buildkit (buildkit namespace, :1234)     │
+│    Images built for host arch (arm64 on VPS, amd64 elsewhere)    │
+│    Import via: buildctl → docker tar → k3s ctr images import -  │
+│    Registry mirrors: /etc/rancher/k3s/registries.yaml            │
+│      docker.io → http://$IP:5000 → registry-1.docker.io          │
+└─────────────────────────────────────────────────────────────────┘
+
+Flow on `make deploy` (default `ENV=dev`):
+  1. `check-config` + `generate-secrets` (DATABASE_URL)
+  2. `nuke` namespace (or `PRESERVE=true` spares PVC/PV/TLS)
+  3. `_ensure-pstorage` / `_ensure-pvs` (hostPath dirs + PVs)
+  4. `tls` (mkcert for dev/test, no-op prod)
+  5. `_ensure-ingress` verifies Traefik svc/IngressClass
+  6. `buildkit` check + `build` (buildctl → ctr import)
+  7. `kubectl kustomize $OVERLAY | envsubst '${DOMAIN}' | kubectl apply -n $NAMESPACE`
+  8. `_wait-ingress` (Traefik ready) + force-rollout postgres/backend/frontend
+  9. `_validate-postgres` + `_report-ports` + `status`
+
+Kustomize: `infra/k8s/base` → `overlays/{dev,test,staging,prod}` patches `newTag` and `imagePullPolicy: IfNotPresent`; `namespace: kumbi` (dev/prod) or `kumbi-$ENV`. TLS via `kumbi-tls` secret per namespace.
 
 ## Environments
 
-All commands take `ENV=dev|test|staging|prod`. Default is `dev`.
+All commands take `ENV=dev|test|staging|prod`. Default `dev`.
 
-| ENV | URL | Namespace |
-|-----|-----|-----------|
-| `dev` | `http://localhost` | `kumbi` |
-| `test` | `http://localhost:8080` | `kumbi-test` |
-| `staging` | `http://localhost:8081` | `kumbi-staging` |
-| `prod` | `https://kumbike.org` | `kumbi` |
+| ENV | DOMAIN (default) | Namespace | Notes |
+|-----|------------------|-----------|-------|
+| `dev` | `kumbi.test` | `kumbi` | mkcert TLS, local k3s |
+| `test` | `test.kumbi.test` | `kumbi-test` | mkcert |
+| `staging` | `staging.kumbike.org` | `kumbi-staging` | external TLS |
+| `prod` | `kumbike.org` | `kumbi` | external TLS, 30003 or 80/443 via servicelb |
 
 ```bash
-make deploy           # dev
+make deploy                # dev
 make deploy ENV=test
-make deploy ENV=prod  # run on the VPS directly
+make deploy ENV=prod       # run on VPS directly
 ```
 
 ## CMS
 
-Log in at `http://localhost/cms` (or click the padlock icon in the navbar).
+Log in at `http://localhost/cms` (or padlock in navbar).
 
 | Section | What you can do |
 |---------|----------------|
-| **Site Content** | Edit all page text, headings, hero images, project card content, footer details, nav brand |
-| **Blog** | Write and publish blog posts with the rich text editor |
-| **Pages** | Manage page metadata and descriptions |
-| **Content** | Edit content blocks (text, image, video, etc.) per page |
-| **Media** | Upload and manage files |
-| **Forms** | View and export contact/volunteer submissions |
-| **Users** | Manage user accounts and roles |
-| **Appearance** | Colours, fonts, theme settings |
+| **Site Content** | Edit page text, headings, hero images, project cards, footer, nav brand |
+| **Blog** | Rich-text posts |
+| **Pages** | Page metadata |
+| **Content** | Content blocks per page |
+| **Media** | File uploads |
+| **Forms** | Contact/volunteer submissions |
+| **Users** | Accounts/roles |
+| **Appearance** | Colours, fonts, theme |
 
 ## Make Reference
 
+Run `make help` for the full annotated list.
+
 ```bash
-make setup                    # install deps
-make test                     # run tests
-make lint                     # lint
-make check-config [ENV=..]   # validate secrets.yaml (run automatically before deploy/seed/refresh)
+# Setup (k3s + buildkit + registry) — prompts IP/token if not given
+make setup [IP=10.100.0.1 TOKEN=xxx]   # Linux: k3s+buildkit+registry+kubectl+deps; macOS: brew buildkit
+make setup-deps                       # deps only: bun install + go mod download
+make setup-k3s                        # k3s step only
+make setup-buildkit                   # buildkit step only
 
-make build [ENV=..] [CONTAINER=all|backend|frontend]  # build + load images
-make build-backend [ENV=..]   # build backend only
-make build-frontend [ENV=..]  # build frontend only
-make deploy                   # full clean-slate deploy (dev)
-make deploy ENV=test          # full test deploy
-make deploy ENV=prod          # full prod deploy (run on VPS)
-make deploy-backend [ENV=..]  # restart backend only
-make deploy-frontend [ENV=..] # restart frontend only
-make deploy-postgres [ENV=..] # restart postgres only
-make refresh [ENV=..]         # rebuild images + redeploy (restarts pods)
-make retry [ENV=..]          # restart failing pods and re-run failed seed job
-make migrate [ENV=..]         # re-run DB migrations
+# Core (build + deploy)
+make deploy   ENV=.. [PRESERVE=true] [SETUP_FIREWALL=1]  # nuke → pvs → build → apply → wait
+make build    ENV=.. [IMG=backend|frontend|all] [NOCACHE=true]
+make refresh  ENV=.. [IMG=..]                       # rebuild + apply + rollout
+make build NOCACHE=true
 
-make cluster-create [ENV=..]  # create k3d cluster
-make cluster-delete [ENV=..]  # delete k3d cluster
-make status [ENV=..]          # docker-ps + k8s nodes + pods/svc/ingress/jobs
-make docker-ps [ENV=..]       # Docker containers in this cluster
-make docker-logs [ENV=..]     # follow k3d server logs
-make nodes [ENV=..]           # Kubernetes nodes
-make logs [ENV=..] [CONTAINER=backend|frontend|postgres] # follow pod logs
-make describe [ENV=..] [CONTAINER=] # describe deployment
-make exec [ENV=..] [CONTAINER=] # open shell in pod
-make teardown [ENV=..]        # ⚠ delete namespace
+# Cluster (systemd k3s)
+make cluster-create ENV=..    # verify k3s running (does not install; use make setup)
+make cluster-ensure ENV=..    # idempotent ready check
+make cluster-delete ENV=..    # k3s-killall.sh
 
-make sync                     # rsync prod code to VPS
-make remote CMD=deploy        # sync + run command on VPS
-make remote CMD=refresh
+# TLS
+make tls ENV=dev|test            # mkcert for ${DOMAIN}+api.${DOMAIN}+www.${DOMAIN}
+make tls ENV=staging|prod        # no-op (external)
+make tls FORCE=true | make tls-force
+make tls-check ENV=..
 
-make scale-up [ENV=..]        # scale backend+frontend to 3 replicas
-make scale-down [ENV=..]      # scale backend+frontend to 1 replica
-make scale [ENV=..] BACKEND_REPLICAS=N FRONTEND_REPLICAS=N
+# Ingress (Traefik is default)
+make buildkit                 # check host systemd vs in-cluster buildkit
+make k3s-check                # verify flannel + servicelb + traefik + buildkit
 
-make seed                     # seed/reset admin user (runs k8s job)
-make create-user NAME=.. EMAIL=.. PASS=.. ROLE=..
+# Management
+make rollout  ENV=.. [CONTAINER=backend|frontend|postgres|all]
+make seed     ENV=..          # via backend startup
+make create-user ENV=.. NAME=.. EMAIL=.. PASS=.. [ROLE=admin]
+make status   ENV=..          # nodes+pv+deploy+svc+jobs+configmaps+secrets+ingress+pods
+make status-pods | status-ingress | status-nodes | status-pv
+make ports    ENV=..          # Traefik svc + Ingress + Services + Endpoints
+make apply    ENV=..          # kubectl kustomize | envsubst | apply
+make logs     ENV=.. [CONTAINER=backend|frontend|postgres]  # follow
+make describe ENV=.. [CONTAINER=]
+make exec     ENV=.. [CONTAINER=]  # shell in deployment
+make migrate  ENV=..          # force-rollout backend
+make nuke     ENV=.. [PRESERVE=true]   # delete all in namespace (spares PVC/PV/TLS if PRESERVE)
+make teardown ENV=..          # delete namespace (prompts)
 
-make save-logs [ENV=..]       # dump docker/k3d/k8s state to logs/
-make images [ENV=..]          # list locally built Docker images
-make logs-cleanup             # remove logs older than 30 days
+# Scaling
+make scale ENV=.. BACKEND_REPLICAS=N FRONTEND_REPLICAS=N
+make scale-up | make scale-down
+
+# Other
+make test                     # go test + bun test
+make lint                     # go vet + bun lint
+make check-config [ENV=..]   # validate secrets.yaml
+make sync [HOST=yox1 DEST=~/kumbi]   # rsync (respects .gitignore)
+make remote CMD=deploy ENV=prod      # sync + ssh
+make save-logs | make images | make logs-cleanup
 ```
 
-Run `make help` for the full annotated list.
+Current `ENV`/`CONTAINER`/`CLUSTER` are echoed by `make help`.
 
 ## Project Structure
 
 ```
 kumbi/
+├── setup.sh            # interactive k3s+buildkit installer (also `make setup`)
+├── scripts/setup.sh    # same logic (called by Makefile; scripts/ is gitignored)
 ├── frontend/src/
-│   ├── api/            # Axios client + typed API functions
+│   ├── api/            # Axios client
 │   ├── components/
-│   │   ├── cms/        # CMS pages (Blog, SiteContent, Pages, Content, …)
-│   │   ├── forms/      # VolunteerSheet overlay
-│   │   ├── layout/     # Navbar, Footer, Layout, CMSLayout
-│   │   ├── pages/      # Public pages (Home, Blog, About, …)
-│   │   └── ui/         # OverlayPanel, RichTextarea, PageHero, ThemeSwitcher, …
-│   ├── hooks/          # useConfig — fetches + merges site_config
-│   └── store/          # authStore, themeStore, volunteerStore, contactStore
+│   │   ├── cms/        # Blog, SiteContent, Pages...
+│   │   ├── layout/     # Navbar, Footer, CMSLayout
+│   │   ├── pages/      # Home, Blog, About...
+│   │   └── ui/         # OverlayPanel, RichTextarea...
+│   ├── hooks/          # useConfig
+│   └── store/          # authStore, themeStore...
 ├── backend/
-│   ├── cmd/server/     # Main entrypoint
-│   ├── cmd/seed/       # Admin seeder CLI
+│   ├── cmd/server/
+│   ├── cmd/seed/
 │   └── internal/
-│       ├── api/        # handlers/, middleware/, routes/
-│       ├── auth/       # JWT + bcrypt
-│       ├── config/     # Env loader
-│       ├── db/         # Connection + migrations (including site_config seed)
-│       └── services/   # Email + WhatsApp notifier
+│       ├── api/        # handlers, middleware, routes
+│       ├── auth/       # JWT
+│       ├── config/
+│       ├── db/         # migrations
+│       └── services/
 ├── infra/
-│   ├── k3d/            # dev-cluster.yaml, test-cluster.yaml, staging-cluster.yaml, prod-cluster.yaml
+│   ├── host/nginx-stream.conf  # optional 80/443 passthrough (traefik already binds 80/443)
 │   └── k8s/
-│       ├── base/       # namespace, postgres, backend, frontend, ingress, seed-job
-│       └── overlays/   # dev, test, staging, prod
-├── docs/               # architecture.md, deployment.md, api.md, …
-├── .github/workflows/  # ci.yml — test → build → deploy-staging → deploy-prod
-└── Makefile
+│       ├── base/       # namespace, storage-classes, postgres, backend, frontend, ingress (Traefik)
+│       ├── overlays/   # dev, test, staging, prod (kustomize + secrets.yaml + kumbi-app-config)
+│       ├── platform/gateway.yaml # DEPRECATED (cilium) — kept for reference
+│       └── tls/        # cluster-issuer (ingress class traefik), certificates
+├── docs/
+└── Makefile            # all automation (systemd/k3s, no sudo)
 ```
 
 ## Secrets
 
-All secrets are gitignored. Copy the `.example` file for each environment and fill in values.
+Gitignored per overlay:
 
 | Env | File |
 |-----|------|
@@ -152,28 +295,20 @@ All secrets are gitignored. Copy the `.example` file for each environment and fi
 | staging | `infra/k8s/overlays/staging/secrets.yaml` |
 | prod | `infra/k8s/overlays/prod/secrets.yaml` |
 
-Key constraints:
-- `DATABASE_URL` is computed by `make generate-secrets` from `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD` — it's stored in `backend-secret` alongside app secrets
-- `ALLOW_ORIGIN` must be `http://localhost` for k3d dev (not `:5173`)
-- `JWT_SECRET` must be at least 32 characters
-- Workflow: `cp secrets.yaml.example secrets.yaml` → edit values → `make deploy` (auto-runs generator → check-config → deploy)
+`kumbi-app-config` ConfigMap in same file is source of truth: `DOMAIN`, `API_DOMAIN`, `INGRESS_HTTP_PORT`/`INGRESS_HTTPS_PORT` (80/443 via servicelb), `POSTGRES_DATA_DIR`/`STORAGE_DATA_DIR`/`CERT_DATA_DIR`, `BACKEND_REPLICAS`/`FRONTEND_REPLICAS`, `ACME_EMAIL`.
 
-See `docs/deployment.md` for the full secrets reference and CI/CD injection patterns.
+Constraints: `JWT_SECRET` ≥32 chars, `DATABASE_URL` auto-generated, `ALLOW_ORIGIN` must match `https://$DOMAIN`.
 
 ## What changed (recent infra overhaul)
 
-- **`DATABASE_URL` reintroduced** — back to the standard single-env-var approach. The generator script (`scripts/generate-secrets.sh`) computes `DATABASE_URL` from `POSTGRES_*` vars and writes it into `backend-secret`. Runs automatically before every deploy via `check-config`. Falls back to compiling from PG vars for local dev / docker-compose.
-- **Three secrets per overlay** — every `secrets.yaml` now has a `backend-secret` (app vars) and a `postgres-secret` (PG credentials with `USER`/`DB`/`PASSWORD`).
-- **`imagePullPolicy: IfNotPresent`** — all overlays (dev/test/staging/prod) patch this via kustomize; base manifests are pull-policy-free.
-- **Staging environment** — new overlay at `infra/k8s/overlays/staging/`, new k3d cluster config at `infra/k3d/staging-cluster.yaml`.
-- **Granular Makefile control** — `CONTAINER=backend|frontend|postgres|all` on `build`, plus dedicated `build-backend`, `deploy-frontend`, `deploy-postgres`, `logs`, `describe`, `exec` targets.
-- **`make create-user`** reads from `secrets.yaml` — no `.env` files involved anywhere.
-- **`make sync`** excludes hidden dirs (`.github`, `.opencode`) and non-prod overlays; only pushes what the VPS needs.
-- **CI/CD fixed** — seed job now kustomized (was applying base file with wrong image tag), image paths deduplicated, secrets renamed to `POSTGRES_*` vars.
-- **No `.env` files** — every target gets its values from `secrets.yaml` or GitHub Secrets. The `godotenv.Load()` in Go is a silent no-op.
-- **Config validation** — `make check-config` (and as a prerequisite to `deploy`/`refresh`/`seed`/`create-user`/`migrate`) validates secrets.yaml for YAML structure, required keys, `CHANGE_ME` placeholders, weak passwords, JWT length, missing `DATABASE_URL`, shared postgres-secret, and matching image tags. Has a 30s timeout.
-- **Image tag consistency** — every overlay's `kustomization.yaml` now patches `newTag` to match the environment name (`dev`, `test`, `staging`, `prod`), so build and deploy always agree on image names. The dev and prod overlays previously used `:latest`, which caused `ErrImagePull` because images were built as `:dev` and `:prod`.
-- **`ctr images import` with dual naming** — reverted from `k3d image import` (which fails with rootless Docker because the tools container can't reach the Docker socket). Now uses `docker save | ctr images import` directly, tagging with both `kumbi/backend:dev` and `docker.io/kumbi/backend:dev` so kubelet always finds the image.
-- **Structured logging** — all make targets (`deploy`, `build`, `refresh`, `seed`, `cluster-create`, `deploy-*`, `migrate`, `status`, `check-config`) capture their output to `logs/<action>-<env>-<timestamp>.log` via `tee`. Comprehensive `make save-logs` dumps Docker/k3d/k8s state. Old logs auto-clean after 30 days (`make logs-cleanup`). CI/CD uploads logs as artifacts per job.
-- **`make retry`** — detects deployments with fewer ready replicas than desired, restarts them, and re-runs any failed seed job. Fixes flaky deploys where pods crash-looped due to secret timing or where the seed job timed out.
-- **`refresh` now restarts pods** — `kubectl apply -k` updates secrets/configmaps, but k8s doesn't restart pods when `envFrom` secrets change. `make refresh` now runs `rollout restart` after `apply -k` so pods pick up new secrets (like the freshly generated `DATABASE_URL`).
+- **Default k3s (flannel vxlan + servicelb + Traefik)** — reverted from Cilium/Gateway API/F5 NGINX. `setup.sh`/`make setup` now prompts for `IP`/`TOKEN` and runs `curl https://get.k3s.io | INSTALL_K3S_EXEC="server --bind-address=$IP ... --flannel-backend=vxlan --tls-san=$IP --embedded-registry --token=$TOKEN" sh -`. Servicelb (`klipper-lb`) fulfills `traefik` Service `LoadBalancer` on 80/443; `Ingress` (`ingressClassName: traefik`) replaces `HTTPRoute`. `k3s-check` verifies `flannel`/`svclb-traefik`/`traefik`.
+
+- **`make setup` now installs k3s + buildkit + registry + kubectl** — Linux systemd `buildkitd` minimal config (`[worker.containerd] address=/run/k3s/containerd/containerd.sock`) with insecure `$IP:5000`/`registry.local:5000`, `CONTAINERD_ADDRESS` persisted to dotfiles/`/etc/profile.d`, embedded registry mirrors in `/etc/rancher/k3s/registries.yaml`; macOS via `brew` + OCI worker + `launchd`. Pass `IP=`/`TOKEN=` for non-interactive. Old deps-only flow moved to `make setup-deps`.
+
+- **BuildKit still systemd, now minimal + k3s containerd** — `/run/buildkit/buildkitd.sock` via `buildkit.socket`; fallback in-cluster `buildkit:1234` kept. `make buildkit`/`make build` use `buildctl --addr unix:///run/buildkit/buildkitd.sock` → `k3s ctr images import -`.
+
+- **Embedded registry** — k3s `--embedded-registry=true` + `registries.yaml` (`docker.io` → `http://$IP:5000`) shared with buildkit (`[registry."$IP:5000"] http/insecure`).
+
+- **Ingress rework** — `infra/k8s/base/ingress.yaml` now `networking.k8s.io/v1` with `traefik.io/router.entrypoints: web,websecure`, `spec.tls` `kumbi-tls`, `host: ${DOMAIN}`/`api.${DOMAIN}`/`www.${DOMAIN}` via `envsubst`. `cluster-issuer` solvers now `http01.ingress.class: traefik` (was `gatewayHTTPRoute`). Platform `gateway.yaml` deprecated.
+
+- **Other kept**: `DATABASE_URL` generation, `imagePullPolicy: IfNotPresent`, per-`ENV` `kustomization.yaml` `newTag`, `ctr images import`, structured `logs/` + `save-logs`, `retry`, `PRESERVE=true`.
