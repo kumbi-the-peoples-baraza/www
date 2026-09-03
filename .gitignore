@@ -1,7 +1,6 @@
 # Local secrets — never commit
 .env
-secret*
-secrets*
+secrets.yaml
 
 # Build artifacts
 bin/
@@ -14,18 +13,13 @@ node_modules/
 storage/
 
 # Logs — capture everything
-logs/*
+logs/
 !logs/.gitkeep
 *.log
 
 # OS
 .DS_Store
 
-# K8s secrets — never commit real values
-overlays/*
-
-secret.*
-secrets.*
 
 db/
 notes/
