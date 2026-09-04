@@ -21,19 +21,26 @@ git clone <repo> && cd kumbi
 make setup
 
 # Non-interactive — pass via env / make vars
-make setup IP=10.100.0.1 TOKEN=$(openssl rand -hex 32)
+make setup IP=${IP_ADDRESS} TOKEN=$(openssl rand -hex 32)
 # or
-IP=10.100.0.1 TOKEN=xxx bash setup.sh
+IP=${IP_ADDRESS} TOKEN=xxx bash setup.sh
 ```
+
+*NOTE ON IP_ADDRESS: You may bind on localhost (127.0.0.1) or provide a bridge
+OR dummy network interface.*
 
 What `make setup` / `setup.sh` does:
 
 **Prompt phase**
-- `IP`: `bind-address` / `advertise-address` / `node-ip` / `tls-san` for k3s. Auto-detected from `hostname -I` / `ip route get 8.8.8.8` with `[10.100.0.1]` fallback if not provided. Validates `^[0-9.]+` or hostname.
+
+- `IP`: `bind-address` / `advertise-address` / `node-ip` / `tls-san` for k3s.
+Auto-detected from `hostname -I` / `ip route get 8.8.8.8` with `[${IP_ADDRESS}]` fallback if not provided. Validates `^[0-9.]+` or hostname.
 - `TOKEN`: k3s join token. Suggests `openssl rand -hex 32` and hides input; generates one non-interactively if no tty.
 
 **On Linux (`uname -s == Linux`)**
+
 1. **k3s** via `https://get.k3s.io`:
+
    ```bash
    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
          --bind-address=$IP \
@@ -47,6 +54,7 @@ What `make setup` / `setup.sh` does:
          --embedded-registry=true \
          --token=$TOKEN" sh -
    ```
+
    Copies `/etc/rancher/k3s/k3s.yaml` → `~/.kube/config` (via `sudo` if needed) and waits for `kubectl get nodes`.
 
 2. **kubectl** if missing — symlinks `k3s -> kubectl` or downloads `https://dl.k8s.io/release/stable.txt` for `$(uname -m)` (`amd64`/`arm64`) to `/usr/local/bin/kubectl`.
@@ -56,6 +64,7 @@ What `make setup` / `setup.sh` does:
 4. **CONTAINERD_ADDRESS** — exports `CONTAINERD_ADDRESS=/run/k3s/containerd/containerd.sock` in current shell and persists to `~/.bashrc`, `~/.zshrc`, `~/.profile`, `/etc/profile.d/k3s-buildkit.sh`, `/etc/environment.d/99-k3s-buildkit.conf`.
 
 5. **buildkit (systemd)** — downloads `moby/buildkit:v0.32.2` for `$ARCH` if missing, installs to `/usr/local/bin`, writes minimal `/etc/buildkit/buildkitd.toml`:
+
    ```toml
    [worker.containerd]
      enabled = true
@@ -66,11 +75,13 @@ What `make setup` / `setup.sh` does:
    [registry."registry.local:5000"]
      http = true; insecure = true
    ```
+
    Creates `buildkit.socket` (`ListenStream=%t/buildkit/buildkitd.sock`) and `buildkit.service` (`After=k3s.service ExecStart=/usr/local/bin/buildkitd --config /etc/buildkit/buildkitd.toml`), `daemon-reload` + `enable --now`, verifies `buildctl --addr unix:///run/buildkit/buildkitd.sock debug workers`.
 
 6. **deps** — checks `bun`/`go` (warns with install hints), then `bun install` in `frontend/` and `go mod download` in `backend/` if present. Installs `gettext` (`envsubst`) / `openssl` / `curl` via `apt/dnf/yum/apk` if missing.
 
 **On macOS (`Darwin`)**
+
 - `brew install buildkit kubectl gettext openssl` if missing, skips `k3s` systemd install (warns `brew install k3d && k3d cluster create`), writes OCI worker `~/.config/buildkit/buildkitd.toml`, starts `brew services start buildkit`.
 
 All steps are idempotent; re-running prompts again but respects `IP=`/`TOKEN=` overrides.
@@ -177,7 +188,7 @@ make deploy ENV=prod       # run on VPS directly
 Log in at `http://localhost/cms` (or padlock in navbar).
 
 | Section | What you can do |
-|---------|----------------|
+| --------- | ---------------- |
 | **Site Content** | Edit page text, headings, hero images, project cards, footer, nav brand |
 | **Blog** | Rich-text posts |
 | **Pages** | Page metadata |
@@ -289,7 +300,7 @@ kumbi/
 Gitignored per overlay:
 
 | Env | File |
-|-----|------|
+| ----- | ------ |
 | dev | `infra/k8s/overlays/dev/secrets.yaml` |
 | test | `infra/k8s/overlays/test/secrets.yaml` |
 | staging | `infra/k8s/overlays/staging/secrets.yaml` |
